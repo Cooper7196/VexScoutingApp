@@ -1,0 +1,94 @@
+<html>
+<head>
+    <title>Vex Scouting App</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <script type="text/javascript" defer>
+        window.onload=function(){
+            document.getElementById("searchBtn").addEventListener("click", function(e) {
+                e.preventDefault();
+                let search = document.getElementById("searchBar").value;
+                let link = "/team/" + search;
+                window.location.href = link;
+            }, false);
+    }
+    </script>
+    {{ moment.include_moment() }}
+</head>
+  <body>
+  <div class="container">
+    <h2 class="display-2">Look Up</h2>
+    <form method="POST" action="/">
+         <div class="input-group mb-3">
+              <input id="searchBar" type="text" name="text" class="form-control" placeholder="614A">
+                  <div class="input-group-append" id="button-addon">
+                    <button id="searchBtn" class="btn btn-outline-primary">Search</button>
+                  </div>
+            </div>
+    </form>
+    <h4 class="display-4">Matches</h4>
+        <p> Team ID: {{curTeam.id}}</p>
+        <table class="table table-hover">
+            <tr>
+                <th>Time</th>
+                <th>Red 1</th>
+                <th>Red 2</th>
+                <th>Blue 1</th>
+                <th>Blue 2</th>
+            </tr>
+            {%for match in matches%}
+            <tr>
+                <td>{{moment(match['time']).format('MMMM Do, h:mm')}}</td>
+                <td class="{{'font-weight-bold ' if match['red'][0].name == curTeam.name else ''}}">
+                    <a class="text-danger" href="/team/{{match['red'][0].name}}">
+                        {{match['red'][0].name}}
+                    </a>
+                </td>
+                <td class="{{'font-weight-bold ' if match['red'][1].name == curTeam.name else ''}}">
+                    <a class="text-danger" href="/team/{{match['red'][1].name}}">
+                        {{match['red'][1].name}}
+                    </a>
+                </td>
+                <td class="{{'font-weight-bold ' if match['blue'][0].name == curTeam.name else ''}}">
+                    <a class="text-primary" href="/team/{{match['blue'][0].name}}">
+                        {{match['blue'][0].name}}
+                    </a>
+                </td>
+                <td class="{{'font-weight-bold ' if match['blue'][1].name == curTeam.name else ''}}">
+                    <a class="text-primary" href="/team/{{match['blue'][1].name}}">
+                        {{match['blue'][1].name}}
+                    </a>
+                </td>
+            {%endfor%}
+        </table>
+
+        <h4 class="display-4 mb-3">Awards</h4>
+        <br>
+        {% for event, awards in awards.items() %}
+        <table class="table table-bordered">
+            <thead class="thead-light">
+                <tr>
+                    <th scope="col">{{event}}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for award in awards %}
+                <tr>
+                    <td>{{award}}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <br>
+        {% endfor %}
+
+        <h4 class="display-4">Notes</h4>
+        <form method="POST" action="">
+            <div class="input-group mb-3">
+                <textarea class="form-control" name="notes" id="notes" rows="10">{{curTeam.notes}}</textarea>
+            </div>
+            <button type="submit" class="btn btn-primary btn-lg btn-block">Save</button>
+        </form>
+
+  </div>
+  </body>
+</html>

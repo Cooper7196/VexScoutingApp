@@ -1,0 +1,31 @@
+<html>
+<head>
+    <title>Vex Scouting App</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <script type="text/javascript" defer>
+        window.onload=function(){
+            document.getElementById("searchBtn").addEventListener("click", function(e) {
+                e.preventDefault();
+                let search = document.getElementById("searchBar").value;
+                let link = "/team/" + search;
+                window.location.href = link;
+            }, false);
+    }
+    </script>
+</head>
+  <body>
+  <div class="container">
+    <h2 class="display-2">Look Up</h2>
+    <form method="POST" action="/">
+         <div class="input-group mb-3">
+              <input id="searchBar" type="text" name="text" class="form-control" placeholder="614A">
+                  <div class="input-group-append" id="button-addon">
+                    <button id="searchBtn" class="btn btn-outline-primary">Search</button>
+                  </div>
+            </div>
+    </form>
+
+    
+  </div>
+  </body>
+</html>
