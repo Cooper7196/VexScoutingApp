@@ -1,6 +1,7 @@
 <html>
 <head>
     <title>Vex Scouting App</title>
+    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
     <script type="text/javascript" defer>
         window.onload=function(){
@@ -15,10 +16,10 @@
 </head>
   <body>
   <div class="container">
-    <h2 class="display-2">Look Up</h2>
+    <h2 class="display-2">Search</h2>
     <form method="POST" action="/">
          <div class="input-group mb-3">
-              <input id="searchBar" type="text" name="text" class="form-control" placeholder="614A" required>
+              <input id="searchBar" type="text" name="text" class="form-control" placeholder="Team Number" required>
                   <div class="input-group-append" id="button-addon">
                     <button id="searchBtn" class="btn btn-outline-primary">Search</button>
                   </div>
