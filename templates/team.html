@@ -5,21 +5,29 @@
     <script type="text/javascript" defer>
         window.onload=function(){
             document.getElementById("searchBtn").addEventListener("click", function(e) {
-                e.preventDefault();
                 let search = document.getElementById("searchBar").value;
+                if (search != ""){
+                    e.preventDefault();
+                }
                 let link = "/team/" + search;
                 window.location.href = link;
             }, false);
     }
     </script>
     {{ moment.include_moment() }}
+    <style>
+        .table-bordered > tbody > tr > td, .table-bordered > tbody > tr > th, .table-bordered > tfoot > tr > td, .table-bordered > tfoot > tr > th, .table-bordered > thead > tr > td, .table-bordered > thead > tr > th {
+            border: 1px solid DimGray;
+        }
+    </style>
+
 </head>
   <body>
   <div class="container">
     <h2 class="display-2">Look Up</h2>
     <form method="POST" action="/">
          <div class="input-group mb-3">
-              <input id="searchBar" type="text" name="text" class="form-control" placeholder="614A">
+              <input id="searchBar" type="text" name="text" class="form-control" placeholder="614A" required>
                   <div class="input-group-append" id="button-addon">
                     <button id="searchBtn" class="btn btn-outline-primary">Search</button>
                   </div>
@@ -63,23 +71,19 @@
 
         <h4 class="display-4 mb-3">Awards</h4>
         <br>
-        {% for event, awards in awards.items() %}
         <table class="table table-bordered">
-            <thead class="thead-light">
-                <tr>
-                    <th scope="col">{{event}}</th>
-                </tr>
-            </thead>
             <tbody>
-                {% for award in awards %}
+        {% for event, awards in awards.items() %}
                 <tr>
+                <th class="table-info" scope="row" rowspan="{{awards|length}}">{{event}}</th>
+                {% for award in awards %}
                     <td>{{award}}</td>
                 </tr>
                 {% endfor %}
-            </tbody>
+        {% endfor %}
+                </tbody>
         </table>
         <br>
-        {% endfor %}
 
         <h4 class="display-4">Notes</h4>
         <form method="POST" action="">
