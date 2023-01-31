@@ -5,19 +5,24 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
     <script type="text/javascript" defer>
         window.onload=function(){
-            document.getElementById("searchBtn").addEventListener("click", function(e) {
+            document.getElementById("searchForm").addEventListener("submit", function(e) {
                 e.preventDefault();
                 let search = document.getElementById("searchBar").value;
                 let link = "/team/" + search;
                 window.location.href = link;
             }, false);
     }
+    {% block script %} {% endblock %}
     </script>
+    {{ moment.include_moment() }}
+    <style>
+    {% block style %} {% endblock %}
+    </style>
 </head>
   <body>
   <div class="container">
     <h2 class="display-2">Search</h2>
-    <form method="POST" action="/">
+    <form id="searchForm" method="POST" action="/">
          <div class="input-group mb-3">
               <input id="searchBar" type="text" name="text" class="form-control" placeholder="Team Number" required>
                   <div class="input-group-append" id="button-addon">
@@ -25,8 +30,7 @@
                   </div>
             </div>
     </form>
-
-    
+  {% block content %} {% endblock %}
   </div>
   </body>
 </html>

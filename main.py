@@ -28,6 +28,8 @@ def api_get(url, params={}):
 
 def get_skills_rank(team):
     r = requests.get(f"https://www.robotevents.com/teams/VRC/{team.name.upper()}")
+    if r.status_code != 200:
+        raise Exception(f"API Error: {r.status_code} {r.text}")
     soup = BeautifulSoup(r.text, "html.parser")
     return soup.select('tr:-soup-contains("World Skills Rank:")')[0].select("td")[0].text
 
@@ -109,23 +111,31 @@ def get_awards(team):
             {"event": {"name": eventData[0], "code": eventData[1]}, "awards": awardList})
     return awards
 
-
 @app.route("/team/<teamNumber>", methods=["POST", "GET"])
 def view_team(teamNumber):
     if bool(Team.query.filter_by(name=teamNumber).first()):
         team = get_team(teamNumber)
     else:
-        team = team_name_to_team(teamNumber)
-        add_team(team)
+        try:
+            team = team_name_to_team(teamNumber)
+            add_team(team)
+        except Exception as e:
+            return render_template("error.html", error = "Team not found")
     if request.method == "POST":
         add_comment(team, request.form.get('comment'))
         return redirect(url_for('view_team', teamNumber=teamNumber))
+    
+    try:
+        matches, awards, skillsRank = get_matches(team), get_awards(team), get_skills_rank(team)
+    except Exception as e:
+        return render_template("error.html", error="Team is not in VRC")
+        matches, awards, skillsRank = [], [], "N/A"
     return render_template(
         "team.html",
         curTeam=team,
-        matches=get_matches(team),
-        awards=get_awards(team),
-        skillsRank=get_skills_rank(team),
+        matches=matches,
+        awards=awards,
+        skillsRank=skillsRank,
         comments=Comment.query.filter_by(team=team.name).all(),
     )
 
@@ -138,11 +148,13 @@ def delete_comment(teamNumber):
         db.session.commit()
         return redirect(url_for('view_team', teamNumber=teamNumber))
 
+
+@app.route("/team/", methods=["GET"])
 @app.route("/", methods=["POST", "GET"])
 def view_index():
     # if request.method == "POST":
     #     create_note(request.form['text'])
-    return render_template("index.html")
+    return render_template("base.html")
 
 
 @app.route('/favicon.ico')
