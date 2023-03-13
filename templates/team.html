@@ -10,6 +10,7 @@
 <h4 class="display-4">Matches</h4>
 <p> RobotEvents: <a href="https://www.robotevents.com/teams/VRC/{{curTeam.name}}">{{curTeam.name}}</a></p>
 <p> Team ID: {{curTeam.id}}</p>
+<p> Predicted Wins: {{score}}</p>
 <table class="table table-hover">
     <tr>
         <th>Time</th>
@@ -18,6 +19,7 @@
         <th>Red 2</th>
         <th>Blue 1</th>
         <th>Blue 2</th>
+        <th>Odds</th>
     </tr>
     {%for match in matches%}
     <tr>
@@ -43,6 +45,8 @@
                 {{match['blue'][1].name}}
             </a>
         </td>
+        <td>{{match['odds']}}</td>
+        
     {%endfor%}
 </table>
 

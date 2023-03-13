@@ -6,6 +6,8 @@ import os
 import requests
 from requests.structures import CaseInsensitiveDict
 from flask_moment import Moment
+import json
+from odds import get_odds
 
 app = Flask(__name__)
 project_dir = os.path.dirname(os.path.abspath(__file__))
@@ -48,6 +50,67 @@ class Comment(db.Model):
     time = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
 
+def get_prediction(match):
+    # print()
+    url = "http://vrc-data-analysis.com/_dash-update-component"
+    headers = CaseInsensitiveDict()
+    headers["Content-Type"] = "application/json"
+    data = {
+        "output": "..prediction-output.children...trueskill-graph.figure..",
+        "outputs": [
+            {
+                "id": "prediction-output",
+                "property": "children"
+            },
+            {
+                "id": "trueskill-graph",
+                "property": "figure"
+            }
+        ],
+        "inputs": [
+            {
+                "id": "predict-match-button",
+                "property": "n_clicks",
+                "value": 3
+            }
+        ],
+        "changedPropIds": [
+            "predict-match-button.n_clicks"
+        ],
+        "state": [
+            {
+                "id": "red_team1",
+                "property": "value",
+                "value": match['red'][0].name
+            },
+            {
+                "id": "red_team2",
+                "property": "value",
+                "value": match['red'][1].name
+            },
+            {
+                "id": "blue_team1",
+                "property": "value",
+                "value": match['blue'][0].name
+            },
+            {
+                "id": "blue_team2",
+                "property": "value",
+                "value": match['blue'][1].name
+            }
+        ]
+    }
+    resp = requests.post(url, headers=headers, data=json.dumps(data))
+    result = resp.json()['response']['prediction-output']['children'].split()
+    out = {
+        "winner": result[0],
+        "odds": float(result[3]),
+    }
+    return out
+    # return resp.json()
+
+
+
 def add_team(team):
     db.session.add(team)
     db.session.commit()
@@ -58,6 +121,9 @@ def get_team(name):
 def team_name_to_team(name):
     teamId = api_get("teams", params={"number": name})['data'][0]['id']
     return Team(name=name, id=teamId)
+def get_color(team, match):
+    # print(team.name, match['red'])
+    return "Red" if team.name in [team.name for team in match['red']] else "Blue"
 
 def add_comment(team, text):
     db.session.add(Comment(team=team.name, text=text))
@@ -130,6 +196,18 @@ def view_team(teamNumber):
     except Exception as e:
         return render_template("error.html", error="Team is not in VRC")
         matches, awards, skillsRank = [], [], "N/A"
+    matchOdds = []
+    for match in matches:
+        color = "red" if team.name in match['red'] else "blue"
+        results = get_prediction(match)
+        match['odds'] = f"{results['odds']}% chance you {'win' if get_color(team, match) == results['winner'] else 'lose'}"
+        matchOdds.append(
+            (100 if get_color(
+                team,
+                match) != results['winner'] else results['odds'] * 2) -
+            results['odds'])
+    # print(get_odds(matchOdds))
+    # print(matchOdds)
     return render_template(
         "team.html",
         curTeam=team,
@@ -137,6 +215,7 @@ def view_team(teamNumber):
         awards=awards,
         skillsRank=skillsRank,
         comments=Comment.query.filter_by(team=team.name).all(),
+        score=f"{get_odds(matchOdds[1:]):.2f} / {len(matchOdds) - 1}"
     )
 
 
