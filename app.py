@@ -1,14 +1,20 @@
 import csv
-import time
-from openskill import create_rating, predict_win
-from flask import Flask, request, render_template, redirect, url_for
-from flask_sqlalchemy import SQLAlchemy
-from datetime import timedelta, datetime
-import os
-import requests
-from requests.structures import CaseInsensitiveDict
-from flask_moment import Moment
+import hashlib
+import hmac
 import json
+import os
+import threading
+import time
+import config
+from datetime import datetime, timedelta
+
+import requests
+from flask import Flask, redirect, render_template, request, url_for
+from flask_moment import Moment
+from flask_sqlalchemy import SQLAlchemy
+from openskill import create_rating, predict_win
+from requests.structures import CaseInsensitiveDict
+
 from odds import get_odds
 
 app = Flask(__name__)
@@ -300,6 +306,30 @@ def favicon():
     return url_for('static', filename='favicon.ico')
 
 
+
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    # X-Hub-Signature-256: sha256=<hash>
+    sig_header = 'X-Hub-Signature-256'
+    if sig_header in request.headers:
+        header_splitted = request.headers[sig_header].split("=")
+        if len(header_splitted) == 2:
+            req_sign = header_splitted[1]
+            computed_sign = hmac.new(
+                config.webhook,
+                request.data,
+                hashlib.sha256).hexdigest()
+            # is the provided signature ok?
+            if hmac.compare_digest(req_sign, computed_sign):
+                # create a thread to return a response (so GitHub is happy) and start a 2s timer before exiting this app
+                # this is supposed to be run by systemd unit which will restart it automatically
+                # the [] syntax for lambda allows to have 2 statements
+                threading.Thread(
+                    target=lambda: [time.sleep(2), os._exit(-1)]).start()
+    return "ok"
+
+
+
 if __name__ == "__main__":
     with app.app_context():
         # db.drop_all()
@@ -307,4 +337,4 @@ if __name__ == "__main__":
         if not Team.query.first():
             load_teams_data()
     moment = Moment(app)
-    app.run(debug=True, host="0.0.0.0")
+    app.run(debug=True, host="0.0.0.0", port=5001)
