@@ -317,7 +317,7 @@ def webhook():
             req_sign = header_splitted[1]
             computed_sign = hmac.new(
                 config.webhook.encode('utf-8'),
-                request.data.encode('utf-8'),
+                request.data,
                 hashlib.sha256).hexdigest()
             # is the provided signature ok?
             if hmac.compare_digest(req_sign, computed_sign):
