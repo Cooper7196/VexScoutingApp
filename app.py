@@ -350,7 +350,6 @@ def view_index():
         if team.division:
             divisions[team.age_group][team.division].append(team)
             divisions[team.age_group]['All'].append(team)
-    print(divisions['high-school'])
     return render_template("index.html", divisions=divisions)
 
 

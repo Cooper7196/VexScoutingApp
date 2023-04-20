@@ -38,7 +38,7 @@
                         </li>
                     {% endfor %}
                 </ul>
-                <div class="tab-content" id="myTabContent" style="height: 85%;">
+                <div class="tab-content" id="myTabContent" style="height: 84%;">
                     {% for division in divisions[age_group] %}
                         <div class="tab-pane fade {{ "show active" if division == "All" else "" }}"
                              id="{{ division + "-" + age_group }}"
@@ -46,7 +46,6 @@
                             <table class="table table-hover"
                                    data-toggle="table"
                                    data-search="true"
-                                   data-sticky-header="true"
                                    data-show-columns="true"
                                    data-custom-sort="customSort">
                                 <thead>
