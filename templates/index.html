@@ -3,66 +3,94 @@
     Vex Scouting App
 {% endblock title %}
 {% block content %}
-    <ul class="nav nav-tabs" id="myTab" role="tablist">
-        {% for division in divisions %}
-            <li class="nav-item " role="presentation">
-                <button class="nav-link {{"active" if division == "All" else "" }}"
-                        id="{{ division }}-tab"
-                        data-bs-toggle="tab"
-                        data-bs-target="#{{ division }}"
-                        type="button"
-                        role="tab">{{ division }}</button>
-            </li>
-        {% endfor %}
+    <ul class="nav nav-tabs" id="" role="tablist">
+        <li class="nav-item " role="presentation">
+            <button class="nav-link active"
+                    id="high-school-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#high-school"
+                    type="button"
+                    role="tab">High School</button>
+        </li>
+        <li class="nav-item " role="presentation">
+            <button class="nav-link"
+                    id="middle-school-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#middle-school"
+                    type="button"
+                    role="tab">Middle School</button>
+        </li>
     </ul>
-    <div class="tab-content" id="myTabContent" style="height: 85%;">
-        {% for division in divisions %}
-            <div class="tab-pane fade {{"show active" if division == "All" else "" }} "
-                 id="{{ division }}"
+    <div class="tab-content" id="myTabContent">
+        {% for age_group in ['high-school', 'middle-school'] %}
+            <div class="tab-pane fade {{ "show active" if age_group == "high-school" else "" }}"
+                 id="{{ age_group }}"
                  role="tabpanel">
-                <table class="table table-hover"
-                       data-toggle="table"
-                       data-search="true"
-                       data-sticky-header="true"
-                       data-show-columns="true"
-                       data-custom-sort="customSort">
-                    <thead>
-                        <tr>
-                            <th data-field="number" data-sortable="true">Number</th>
-                            {% if division == "All" %}<th data-field="div" data-searchable="false">Division</th>{% endif %}
-                            <th data-field="name">Name</th>
-                            <th data-field="region">Region</th>
-                            <th data-field="rank" data-sortable="true" data-searchable="false">Skills Rank</th>
-                            <th data-field="score" data-sortable="true" data-searchable="false">Skills Score</th>
-                            <th data-field="true_skill" data-sortable="true" data-searchable="false">True Skill</th>
-                            <th data-field="ccwm" data-sortable="true" data-searchable="false">CCWM</th>
-                            <th data-field="opr" data-sortable="true" data-searchable="false">OPR</th>
-                            <th data-field="dpr" data-sortable="true" data-searchable="false">DPR</th>
-                            <th data-field="wlt" data-sortable="false" data-searchable="false">Win/Loss/Tie</th>
-                            <th data-field="win_rate" data-sortable="true" data-searchable="false">Win Rate</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for team in divisions[division] %}
-                            <tr>
-                                <td>
-                                    <a class="" href="/team/{{ team.number }}/">{{ team.number }}</a>
-                                </td>
-                                {% if division == "All" %}<td>{{ team.division }}</td>{% endif %}
-                                <td>{{ team.name }}</td>
-                                <td>{{ team.region }}</td>
-                                <td>{{ (team.skills_rank) }}</td>
-                                <td>{{ team.skills_score_overall }}</td>
-                                <td>{{ (team.true_skill[0] - (3 * team.true_skill[1]))|round(1) }}</td>
-                                <td>{{ team.ccwm| round(1) }}</td>
-                                <td>{{ team.opr | round(1) }}</td>
-                                <td>{{ team.dpr | round(1) }}</td>
-                                <td>{{ team.win_count }} / {{ team.loss_count }} / {{ team.tie_count }}</td>
-                                <td>{{ ((team.win_count / (team.win_count + team.loss_count + team.tie_count)) * 100) | round(1) }}%</td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                <ul class="nav nav-tabs" id="myTab" role="tablist">
+                    {% for division in divisions[age_group] %}
+                        <li class="nav-item " role="presentation">
+                            <button class="nav-link {{"active" if division == "All" else "" }}"
+                                    id="{{ division }}-tab"
+                                    data-bs-toggle="tab"
+                                    data-bs-target="#{{ division + "-" + age_group }}"
+                                    type="button"
+                                    role="tab">{{ division }}</button>
+                        </li>
+                    {% endfor %}
+                </ul>
+                <div class="tab-content" id="myTabContent" style="height: 85%;">
+                    {% for division in divisions[age_group] %}
+                        <div class="tab-pane fade {{ "show active" if division == "All" else "" }}"
+                             id="{{ division + "-" + age_group }}"
+                             role="tabpanel">
+                            <table class="table table-hover"
+                                   data-toggle="table"
+                                   data-search="true"
+                                   data-sticky-header="true"
+                                   data-show-columns="true"
+                                   data-custom-sort="customSort">
+                                <thead>
+                                    <tr>
+                                        <th data-field="number" data-sortable="true">Number</th>
+                                        {% if division == "All" %}<th data-field="div" data-searchable="false">Division</th>{% endif %}
+                                        <th data-field="name">Name</th>
+                                        <th data-field="region">Region</th>
+                                        <th data-field="rank" data-sortable="true" data-searchable="false">Skills Rank</th>
+                                        <th data-field="score" data-sortable="true" data-searchable="false">Skills Score</th>
+                                        <th data-field="true_skill" data-sortable="true" data-searchable="false">True Skill</th>
+                                        <th data-field="ccwm" data-sortable="true" data-searchable="false">CCWM</th>
+                                        <th data-field="opr" data-sortable="true" data-searchable="false">OPR</th>
+                                        <th data-field="dpr" data-sortable="true" data-searchable="false">DPR</th>
+                                        <th data-field="wlt" data-sortable="false" data-searchable="false">Win/Loss/Tie</th>
+                                        <th data-field="win_rate" data-sortable="true" data-searchable="false">Win Rate</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for team in divisions[age_group][division] %}
+                                        <tr>
+                                            <td>
+                                                <a class="" href="/team/{{ team.number }}/">{{ team.number }}</a>
+                                            </td>
+                                            {% if division == "All" %}<td>{{ team.division }}</td>{% endif %}
+                                            <td>{{ team.name }}</td>
+                                            <td>{{ team.region }}</td>
+                                            <td>{{ (team.skills_rank) }}</td>
+                                            <td>{{ team.skills_score_overall }}</td>
+                                            <td>{{ (team.true_skill[0] - (3 * team.true_skill[1]))|round(1) }}</td>
+                                            <td>{{ team.ccwm| round(1) }}</td>
+                                            <td>{{ team.opr | round(1) }}</td>
+                                            <td>{{ team.dpr | round(1) }}</td>
+                                            <td>{{ team.win_count }} / {{ team.loss_count }} / {{ team.tie_count }}</td>
+                                            <td>
+                                                {{ ((team.win_count / (team.win_count + team.loss_count + team.tie_count)) * 100) | round(1) }}%
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% endfor %}
+                </div>
             </div>
         {% endfor %}
     </div>

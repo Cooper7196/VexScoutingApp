@@ -40,6 +40,7 @@ def api_get(url, params={}):
         raise Exception(f"API Error: {r.status_code} {r.text}")
     return r.json()
 
+
 class Team(db.Model):
     number = db.Column(db.Text, primary_key=True)
     id = db.Column(db.Integer)
@@ -57,6 +58,7 @@ class Team(db.Model):
     win_count = db.Column(db.Integer, nullable=True)
     loss_count = db.Column(db.Integer, nullable=True)
     tie_count = db.Column(db.Integer, nullable=True)
+    age_group = db.Column(db.Text, nullable=True)
     # matches = db.relationship("Match", backref="team", lazy=True)
 
     def __repr__(self):
@@ -81,13 +83,18 @@ def load_teams_data():
         next(reader)
         for row in reader:
             divisions[row[0]] = row[1]
+    with open("VRC-MS-Divisions.csv", encoding="utf8") as f:
+        reader = csv.reader(f)
+        next(reader)
+        for row in reader:
+            divisions[row[0]] = row[1]
     with open("CCWM.json", "r") as f:
         ccwmData = json.load(f)
     with open("winrate.json", "r") as f:
         winrateData = json.load(f)
     with open("matches.json", "r") as f:
         matchesData = json.load(f)
-    with open("world-skill-standings.csv", encoding="utf8") as f:
+    with open("world-skill-standings-hs.csv", encoding="utf8") as f:
         reader = csv.reader(f)
         next(reader)
         for row in reader:
@@ -109,6 +116,36 @@ def load_teams_data():
                     win_count=winrateData.get(row[10], None)[0],
                     loss_count=winrateData.get(row[10], None)[1],
                     tie_count=winrateData.get(row[10], None)[2],
+                    age_group="high-school",
+                )
+            except Exception as e:
+                print(e)
+                print(row[10])
+                continue
+            add_team(team)
+    with open("world-skill-standings-ms.csv", encoding="utf8") as f:
+        reader = csv.reader(f)
+        next(reader)
+        for row in reader:
+            # print(row[10])
+            try:
+                team = Team(
+                    skills_rank=row[0],
+                    skills_score_overall=row[1],
+                    skills_score_autonomous=row[2],
+                    skills_score_driver=row[3],
+                    number=row[10],
+                    name=row[11],
+                    true_skill=teams.get(row[10], None),
+                    region=row[13],
+                    division=divisions.get(row[10], None),
+                    ccwm=ccwmData.get(row[10], None)["CCWM"],
+                    opr=ccwmData.get(row[10], None)["OPR"],
+                    dpr=ccwmData.get(row[10], None)["DPR"],
+                    win_count=winrateData.get(row[10], None)[0],
+                    loss_count=winrateData.get(row[10], None)[1],
+                    tie_count=winrateData.get(row[10], None)[2],
+                    age_group="middle-school",
                 )
             except Exception as e:
                 print(e)
@@ -216,6 +253,8 @@ def get_awards(team):
         awards.append(
             {"event": {"name": eventData[0], "code": eventData[1]}, "awards": awardList})
     return awards
+
+
 @app.route("/team/<teamNumber>/", methods=["POST", "GET"])
 def view_team(teamNumber):
     teamNumber = teamNumber.upper()
@@ -281,30 +320,43 @@ def delete_comment(teamNumber):
 @app.route("/team/", methods=["GET"])
 @app.route("/", methods=["POST", "GET"])
 def view_index():
-    divisions = {'All': [],
-                 'Math': [],
-                 "Technology": [],
-                 "Science": [],
-                 "Engineering": [],
-                 "Arts": [],
-                 "Innovate": [],
-                 "Spirit": [],
-                 "Design": [],
-                 "Research": [],
-                 "Opportunity": [],
-                 }
+    divisions = {
+        "high-school":
+        {
+            'All': [],
+            'Math': [],
+            "Technology": [],
+            "Science": [],
+            "Engineering": [],
+            "Arts": [],
+            "Innovate": [],
+            "Spirit": [],
+            "Design": [],
+            "Research": [],
+            "Opportunity": [],
+        },
+        "middle-school":
+        {
+            'All': [],
+            'Science': [],
+            "Technology": [],
+            "Engineering": [],
+            "Math": [],
+            "Arts": [],
+            "Opportunity": [],
+        }
+    }
     for team in Team.query.all():
         if team.division:
-            divisions[team.division].append(team)
-            divisions['All'].append(team)
-    # order divisions
+            divisions[team.age_group][team.division].append(team)
+            divisions[team.age_group]['All'].append(team)
+    print(divisions['high-school'])
     return render_template("index.html", divisions=divisions)
 
 
 @app.route('/favicon.ico')
 def favicon():
     return url_for('static', filename='favicon.ico')
-
 
 
 @app.route('/webhook', methods=['POST'])
@@ -328,14 +380,24 @@ def webhook():
                     target=lambda: [time.sleep(2), os._exit(-1)]).start()
     return "ok"
 
+# regenerate DB
+
+
+@app.route("/regen/", methods=["GET"])
+def regen():
+    db.drop_all()
+    db.create_all()
+    load_teams_data()
+    return redirect(url_for('view_index'))
 
 
 if __name__ == "__main__":
     with app.app_context():
         # db.drop_all()
-        db.create_all()
-        if not Team.query.first():
-            load_teams_data()
+        # db.create_all()
+        # if not Team.query.first():
+        #     load_teams_data()
+        pass
     moment = Moment(app)
     if os.environ.get('ENV') == 'prod':
         app.run(host="0.0.0.0", port=80)
