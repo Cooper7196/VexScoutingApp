@@ -1,91 +1,124 @@
 {% extends 'base.html' %}
-
-{% block style%}
+{% block title %}{{ curTeam.number }}{% endblock %}
+{% block style %}
     .table-bordered > tbody > tr > td, .table-bordered > tbody > tr > th, .table-bordered > tfoot > tr > td, .table-bordered > tfoot > tr > th, .table-bordered > thead > tr > td, .table-bordered > thead > tr > th {
-        border: 1px solid DimGray;
+    border: 1px solid DimGray;
     }
 {% endblock %}
 {% block content %}
-
-<h4 class="display-4">Matches</h4>
-<p> RobotEvents: <a href="https://www.robotevents.com/teams/VRC/{{curTeam.name}}">{{curTeam.name}}</a></p>
-<p> Team ID: {{curTeam.id}}</p>
-<p> Predicted Wins: {{score}}</p>
-<table class="table table-hover">
-    <tr>
-        <th>Time</th>
-        <th>Name</th>
-        <th>Red 1</th>
-        <th>Red 2</th>
-        <th>Blue 1</th>
-        <th>Blue 2</th>
-        <th>Odds</th>
-    </tr>
-    {%for match in matches%}
-    <tr>
-        <td>{{match['time']}}</td>
-        <td>{{match['name']}}</td>
-        <td class="{{'font-weight-bold ' if match['red'][0].name == curTeam.name else ''}}">
-            <a class="text-danger" href="/team/{{match['red'][0].name}}">
-                {{match['red'][0].name}}
-            </a>
-        </td>
-        <td class="{{'font-weight-bold ' if match['red'][1].name == curTeam.name else ''}}">
-            <a class="text-danger" href="/team/{{match['red'][1].name}}">
-                {{match['red'][1].name}}
-            </a>
-        </td>
-        <td class="{{'font-weight-bold ' if match['blue'][0].name == curTeam.name else ''}}">
-            <a class="text-primary" href="/team/{{match['blue'][0].name}}">
-                {{match['blue'][0].name}}
-            </a>
-        </td>
-        <td class="{{'font-weight-bold ' if match['blue'][1].name == curTeam.name else ''}}">
-            <a class="text-primary" href="/team/{{match['blue'][1].name}}">
-                {{match['blue'][1].name}}
-            </a>
-        </td>
-        <td>{{match['odds']}}</td>
-        
-    {%endfor%}
-</table>
-
-<h4 class="display-4 mb-3">Awards</h4>
-<h5>World Skills Rank: {{skillsRank}}</h5>
-<br>
-<table class="table table-bordered">
-    <tbody>
-        {% for event in awards %}
+    <h4 class="display-4">Matches</h4>
+    <p>
+        RobotEvents: <a target="_blank"
+    href="https://www.robotevents.com/teams/VRC/{{ curTeam.number }}">{{ curTeam.number }}</a>
+    </p>
+    <p>Region: {{ curTeam.region }}</p>
+    <p>Predicted Wins: {{ score }}</p>
+    <p>Division: {{ curTeam.division }}</p>
+    <table class="table table-hover">
         <tr>
-            <th class="table-info" scope="row" rowspan="{{event['awards']|length}}"><a class="text-dark" href="https://www.robotevents.com/robot-competitions/vex-robotics-competition/{{event['event']['code']}}.html">{{event['event']['name']}}</a></th>
-            {% for award in event['awards'] %}
-            <td>{{award}}</td>
+            <th>Time</th>
+            <th>Name</th>
+            <th>Red 1</th>
+            <th>Red 2</th>
+            <th>Blue 1</th>
+            <th>Blue 2</th>
+            <th>Odds</th>
         </tr>
+        {% for match in matches %}
+            <tr>
+                <td>{{ match['time'] }}</td>
+                <td>{{ match['name'] }}</td>
+                <td class="{{'font-weight-bold ' if match['red'][0].name == curTeam.name else '' }}">
+                    <a class="text-danger" href="/team/{{ match['red'][0].name }}/">{{ match['red'][0].name }}</a>
+                </td>
+                <td class="{{'font-weight-bold ' if match['red'][1].name == curTeam.name else '' }}">
+                    <a class="text-danger" href="/team/{{ match['red'][1].name }}/">{{ match['red'][1].name }}</a>
+                </td>
+                <td class="{{'font-weight-bold ' if match['blue'][0].name == curTeam.name else '' }}">
+                    <a class="text-primary" href="/team/{{ match['blue'][0].name }}/">{{ match['blue'][0].name }}</a>
+                </td>
+                <td class="{{'font-weight-bold ' if match['blue'][1].name == curTeam.name else '' }}">
+                    <a class="text-primary" href="/team/{{ match['blue'][1].name }}/">{{ match['blue'][1].name }}</a>
+                </td>
+                <td>{{ match['odds'] }}</td>
+            </tr>
         {% endfor %}
-{% endfor %}
-    </tbody>
-</table>
-
-    <h4 class="display-4">Comments</h4>
+        {% if matches|length == 0 %}
+            <tr>
+                <td colspan="7">No matches found</td>
+            </tr>
+        {% endif %}
+    </table>
+    <h4 class="display-4 mb-3">Awards</h4>
+    <table class="table table-hover">
+        <tr>
+            <th>World Skills Rank</th>
+            <th>Best Driver</th>
+            <th>Best Prog</th>
+            <th>Best Score</th>
+        </tr>
+        <tr>
+            <td>{{ curTeam.skills_rank }}</td>
+            <td>
+                {{ curTeam.skills_score_driver }}
+            </td>
+            <td>
+                {{ curTeam.skills_score_autonomous }}
+            </td>
+            <td>
+                {{ curTeam.skills_score_overall }}
+            </td>
+        </tr>
+    </table>
+    <br>
+    <table class="table table-bordered">
+        <tbody>
+            {% for event in awards %}
+                <tr>
+                    <th class="table-info" scope="row" rowspan="{{ event['awards']|length }}">
+                        <a class="text-dark"
+                           target="_blank"
+                           href="https://www.robotevents.com/robot-competitions/vex-robotics-competition/{{ event['event']['code'] }}.html">{{ event['event']['name'] }}</a>
+                    </th>
+                    {% for award in event['awards'] %}
+                        <td>
+                            {{ award }}
+                        </td>
+                    </tr>
+                {% endfor %}
+            {% endfor %}
+        </tbody>
+    </table>
+    <h4 class="display-4">
+        Comments
+    </h4>
     <form method="POST" action="">
         <div class="input-group mb-3">
             <textarea class="form-control" name="comment" id="comment" rows="2"></textarea>
         </div>
-        <button type="submit" class="btn btn-primary btn-lg btn-block">Comment</button>
+        <button type="submit" class="btn btn-primary btn-lg btn-block">
+            Comment
+        </button>
     </form>
     <table class="table table-bordered">
         <tbody>
             {% for comment in comments %}
-            <tr>
-                <td>{{comment.text}}</td>
-                <td>{{moment(comment.time).format('MMM Do, h:mm:ss')}}</td>
-                <td>
-                    <form method="POST" action="/delete/{{curTeam.name}}">
-                        <input type="hidden" name="comment_id" value="{{comment.id}}">
-                        <button type="submit" class="btn btn-danger">Delete</button>
-                    </form>
-                </td>
-            </tr>
+                <tr>
+                    <td>
+                        {{ comment.text }}
+                    </td>
+                    <td>
+                        {{ moment(comment.time).format('MMM Do, h:mm:ss') }}
+                    </td>
+                    <td>
+                        <form method="POST" action="/delete/{{ curTeam.number }}">
+                            <input type="hidden" name="comment_id" value="{{ comment.id }}">
+                            <button type="submit" class="btn btn-danger">
+                                Delete
+                            </button>
+                        </form>
+                    </td>
+                </tr>
             {% endfor %}
         </tbody>
     </table>

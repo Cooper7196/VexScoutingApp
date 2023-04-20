@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+{% block title %}
+    Vex Scouting App
+{% endblock title %}
+{% block content %}
+    <ul class="nav nav-tabs" id="myTab" role="tablist">
+        {% for division in divisions %}
+            <li class="nav-item " role="presentation">
+                <button class="nav-link {{"active" if division == "All" else "" }}"
+                        id="{{ division }}-tab"
+                        data-bs-toggle="tab"
+                        data-bs-target="#{{ division }}"
+                        type="button"
+                        role="tab">{{ division }}</button>
+            </li>
+        {% endfor %}
+    </ul>
+    <div class="tab-content" id="myTabContent" style="height: 85%;">
+        {% for division in divisions %}
+            <div class="tab-pane fade {{"show active" if division == "All" else "" }} "
+                 id="{{ division }}"
+                 role="tabpanel">
+                <table class="table table-hover"
+                       data-toggle="table"
+                       data-search="true"
+                       data-sticky-header="true"
+                       data-show-columns="true"
+                       data-custom-sort="customSort">
+                    <thead>
+                        <tr>
+                            <th data-field="number" data-sortable="true">Number</th>
+                            {% if division == "All" %}<th data-field="div" data-searchable="false">Division</th>{% endif %}
+                            <th data-field="name">Name</th>
+                            <th data-field="region">Region</th>
+                            <th data-field="rank" data-sortable="true" data-searchable="false">Skills Rank</th>
+                            <th data-field="score" data-sortable="true" data-searchable="false">Skills Score</th>
+                            <th data-field="true_skill" data-sortable="true" data-searchable="false">True Skill</th>
+                            <th data-field="ccwm" data-sortable="true" data-searchable="false">CCWM</th>
+                            <th data-field="opr" data-sortable="true" data-searchable="false">OPR</th>
+                            <th data-field="dpr" data-sortable="true" data-searchable="false">DPR</th>
+                            <th data-field="wlt" data-sortable="false" data-searchable="false">Win/Loss/Tie</th>
+                            <th data-field="win_rate" data-sortable="true" data-searchable="false">Win Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for team in divisions[division] %}
+                            <tr>
+                                <td>
+                                    <a class="" href="/team/{{ team.number }}/">{{ team.number }}</a>
+                                </td>
+                                {% if division == "All" %}<td>{{ team.division }}</td>{% endif %}
+                                <td>{{ team.name }}</td>
+                                <td>{{ team.region }}</td>
+                                <td>{{ (team.skills_rank) }}</td>
+                                <td>{{ team.skills_score_overall }}</td>
+                                <td>{{ (team.true_skill[0] - (3 * team.true_skill[1]))|round(1) }}</td>
+                                <td>{{ team.ccwm| round(1) }}</td>
+                                <td>{{ team.opr | round(1) }}</td>
+                                <td>{{ team.dpr | round(1) }}</td>
+                                <td>{{ team.win_count }} / {{ team.loss_count }} / {{ team.tie_count }}</td>
+                                <td>{{ ((team.win_count / (team.win_count + team.loss_count + team.tie_count)) * 100) | round(1) }}%</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endfor %}
+    </div>
+    <script>
+        function customSort(sortName, sortOrder, data){
+            if (sortName === 'win_rate') {
+                data.sort(function (a, b) {
+                    a = a[sortName];
+                    b = b[sortName];
+                    a = a.replace('%', '');
+                    b = b.replace('%', '');
+                    a = parseFloat(a);
+                    b = parseFloat(b);
+                    return a - b;
+                });
+                if (sortOrder === 'desc') {
+                    data.reverse();
+                }
+            }
+            else if(sortName === "number"){
+                // Sort by team numbers then letter (ex. 614A)
+                data.sort(function (a, b) {
+                    a = a[sortName];
+                    b = b[sortName];
+                    aEl = document.createElement("div")
+                    aEl.innerHTML = a;
+                    bEl = document.createElement("div")
+                    bEl.innerHTML = b;
+                    a = aEl.textContent;
+                    b = bEl.textContent;
+
+                    aNum = parseInt(a.substring(0, a.length - 1))
+                    bNum = parseInt(b.substring(0, b.length - 1))
+                    if(aNum === bNum){
+                        aLetter = a.substring(a.length - 1);
+                        bLetter = b.substring(b.length - 1);
+                        return aLetter.charCodeAt(0) - bLetter.charCodeAt(0);
+                    }
+                    else{
+                        return aNum - bNum;
+                    }
+                });
+                if (sortOrder === 'desc') {
+                    data.reverse();
+                }                
+            }
+            else{
+                data.sort(function (a, b) {
+                    a = a[sortName];
+                    b = b[sortName];
+                    a = parseFloat(a);
+                    b = parseFloat(b);
+                    return a - b;
+                });
+                if (sortOrder === 'desc') {
+                    data.reverse();
+                }
+            }
+        }
+    </script>
+{% endblock content %}
