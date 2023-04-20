@@ -338,6 +338,6 @@ if __name__ == "__main__":
             load_teams_data()
     moment = Moment(app)
     if os.environ['ENV'] == 'prod':
-        app.run(host="0.0.0.0")
+        app.run(host="0.0.0.0", port=80)
     else:
         app.run(debug=True, host="127.0.0.1", port=5001)
