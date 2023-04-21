@@ -88,6 +88,8 @@ def load_teams_data():
         next(reader)
         for row in reader:
             divisions[row[0]] = row[1]
+
+    
     with open("CCWM.json", "r") as f:
         ccwmData = json.load(f)
     with open("winrate.json", "r") as f:
@@ -99,6 +101,8 @@ def load_teams_data():
         next(reader)
         for row in reader:
             # print(row[10])
+            if row[13] == "Chinese Taipei":
+                row[13] = "Taiwan"
             try:
                 team = Team(
                     skills_rank=row[0],
