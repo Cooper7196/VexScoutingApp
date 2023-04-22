@@ -280,12 +280,8 @@ def view_team(teamNumber):
         db.session.commit()
     try:
         # time each api call
-        start = time.time()
         matches = get_matches(team)
-        print(f"Matches: {time.time() - start}")
-        start = time.time()
         awards = get_awards(team)
-        print(f"Awards: {time.time() - start}")
     except Exception as e:
         print(e)
         return render_template("error.html", error="Team is not in VRC")
