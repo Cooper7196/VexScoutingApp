@@ -74,28 +74,11 @@ class Comment(db.Model):
 
 def load_teams_data():
     with open("trueSkill.json", "r") as f:
-        teams = json.load(f)
-        teams = {team[0]: team[1] for team in teams}
+        trueSkillData = json.load(f)
+        trueSkillData = {team[0]: team[1] for team in trueSkillData}
 
     divisions = {}
-    with open("VRC-HS-Divisions.csv", encoding="utf8") as f:
-        reader = csv.reader(f)
-        next(reader)
-        for row in reader:
-            divisions[row[0]] = row[1]
-    with open("VRC-MS-Divisions.csv", encoding="utf8") as f:
-        reader = csv.reader(f)
-        next(reader)
-        for row in reader:
-            divisions[row[0]] = row[1]
-
-    
-    with open("CCWM.json", "r") as f:
-        ccwmData = json.load(f)
-    with open("winrate.json", "r") as f:
-        winrateData = json.load(f)
-    with open("matches.json", "r") as f:
-        matchesData = json.load(f)
+    skillsData = {}
     with open("world-skill-standings-hs.csv", encoding="utf8") as f:
         reader = csv.reader(f)
         next(reader)
@@ -103,59 +86,85 @@ def load_teams_data():
             # print(row[10])
             if row[13] == "Chinese Taipei":
                 row[13] = "Taiwan"
-            try:
-                team = Team(
-                    skills_rank=row[0],
-                    skills_score_overall=row[1],
-                    skills_score_autonomous=row[2],
-                    skills_score_driver=row[3],
-                    number=row[10],
-                    name=row[11],
-                    true_skill=teams.get(row[10], None),
-                    region=row[13],
-                    division=divisions.get(row[10], None),
-                    ccwm=ccwmData.get(row[10], None)["CCWM"],
-                    opr=ccwmData.get(row[10], None)["OPR"],
-                    dpr=ccwmData.get(row[10], None)["DPR"],
-                    win_count=winrateData.get(row[10], None)[0],
-                    loss_count=winrateData.get(row[10], None)[1],
-                    tie_count=winrateData.get(row[10], None)[2],
-                    age_group="high-school",
-                )
-            except Exception as e:
-                print(e)
-                print(row[10])
-                continue
-            add_team(team)
-    with open("world-skill-standings-ms.csv", encoding="utf8") as f:
+            skillsData[row[10]] = row
+
+    with open("CCWM.json", "r") as f:
+        ccwmData = json.load(f)
+    with open("winrate.json", "r") as f:
+        winrateData = json.load(f)
+    with open("matches.json", "r") as f:
+        matchesData = json.load(f)
+
+    with open("VRC-HS-Divisions.csv", encoding="utf8") as f:
         reader = csv.reader(f)
         next(reader)
         for row in reader:
-            # print(row[10])
-            try:
-                team = Team(
-                    skills_rank=row[0],
-                    skills_score_overall=row[1],
-                    skills_score_autonomous=row[2],
-                    skills_score_driver=row[3],
-                    number=row[10],
-                    name=row[11],
-                    true_skill=teams.get(row[10], None),
-                    region=row[13],
-                    division=divisions.get(row[10], None),
-                    ccwm=ccwmData.get(row[10], None)["CCWM"],
-                    opr=ccwmData.get(row[10], None)["OPR"],
-                    dpr=ccwmData.get(row[10], None)["DPR"],
-                    win_count=winrateData.get(row[10], None)[0],
-                    loss_count=winrateData.get(row[10], None)[1],
-                    tie_count=winrateData.get(row[10], None)[2],
-                    age_group="middle-school",
-                )
-            except Exception as e:
-                print(e)
-                print(row[10])
-                continue
+            divisions[row[0]] = row[1]
+            teamCCWMData = ccwmData.get(
+                row[0], {"CCWM": "N/A", "OPR": "N/A", "DPR": "N/A"})
+            teamWinrateData = winrateData.get(row[0], (0, 0, 0))
+            teamSkillsData = skillsData.get(row[0], None)
+            if teamSkillsData is None:
+                teamInfo = team_name_to_team(row[0])
+                teamSkillsData = ["N/A"] * 14
+                teamSkillsData[13] = teamInfo.region
+                teamSkillsData[11] = teamInfo.name
+            teanTrueSkill = trueSkillData.get(row[0], "N/A")
+            team = Team(
+                skills_rank=teamSkillsData[0],
+                skills_score_overall=teamSkillsData[1],
+                skills_score_autonomous=teamSkillsData[2],
+                skills_score_driver=teamSkillsData[3],
+                number=row[0],
+                name=teamSkillsData[11],
+                true_skill=teanTrueSkill,
+                region=teamSkillsData[13],
+                division=row[1],
+                ccwm=teamCCWMData["CCWM"],
+                opr=teamCCWMData["OPR"],
+                dpr=teamCCWMData["DPR"],
+                win_count=teamWinrateData[0],
+                loss_count=teamWinrateData[1],
+                tie_count=teamWinrateData[2],
+                age_group="high-school",
+            )
             add_team(team)
+
+    # with open("VRC-MS-Divisions.csv", encoding="utf8") as f:
+    #     reader=csv.reader(f)
+    #     next(reader)
+    #     for row in reader:
+    #         divisions[row[0]]=row[1]
+
+    # with open("world-skill-standings-ms.csv", encoding="utf8") as f:
+    #     reader=csv.reader(f)
+    #     next(reader)
+    #     for row in reader:
+    #         # print(row[10])
+    #         try:
+    #             team=Team(
+    #                 skills_rank=row[0],
+    #                 skills_score_overall=row[1],
+    #                 skills_score_autonomous=row[2],
+    #                 skills_score_driver=row[3],
+    #                 number=row[10],
+    #                 name=row[11],
+    #                 true_skill=teams.get(row[10], None),
+    #                 region=row[13],
+    #                 division=divisions.get(row[10], None),
+    #                 ccwm=ccwmData.get(row[10], None)["CCWM"],
+    #                 opr=ccwmData.get(row[10], None)["OPR"],
+    #                 dpr=ccwmData.get(row[10], None)["DPR"],
+    #                 win_count=winrateData.get(row[10], None)[0],
+    #                 loss_count=winrateData.get(row[10], None)[1],
+    #                 tie_count=winrateData.get(row[10], None)[2],
+    #                 age_group="middle-school",
+    #             )
+    #         except Exception as e:
+    #             print(e)
+    #             print(row[10])
+    #             continue
+    #         add_team(team)
 
 
 def get_prediction(match):
@@ -186,6 +195,7 @@ def get_team(number):
 
 def team_name_to_team(number):
     teamData = api_get("teams", params={"number": number})['data'][0]
+    print(teamData['number'] + " " + teamData["id"])
     team = Team(
         number=teamData['number'],
         id=teamData['id'],
@@ -259,7 +269,7 @@ def get_awards(team):
     return awards
 
 
-@app.route("/team/<teamNumber>/", methods=["POST", "GET"])
+@ app.route("/team/<teamNumber>/", methods=["POST", "GET"])
 def view_team(teamNumber):
     teamNumber = teamNumber.upper()
     if bool(Team.query.filter_by(number=teamNumber).first()):
@@ -308,7 +318,7 @@ def view_team(teamNumber):
     )
 
 
-@app.route("/delete/<teamNumber>/", methods=["POST"])
+@ app.route("/delete/<teamNumber>/", methods=["POST"])
 def delete_comment(teamNumber):
     if request.method == "POST":
         db.session.query(Comment).filter_by(
@@ -317,8 +327,8 @@ def delete_comment(teamNumber):
         return redirect(url_for('view_team', teamNumber=teamNumber))
 
 
-@app.route("/team/", methods=["GET"])
-@app.route("/", methods=["POST", "GET"])
+@ app.route("/team/", methods=["GET"])
+@ app.route("/", methods=["POST", "GET"])
 def view_index():
     divisions = {
         "high-school":
@@ -353,12 +363,12 @@ def view_index():
     return render_template("index.html", divisions=divisions)
 
 
-@app.route('/favicon.ico')
+@ app.route('/favicon.ico')
 def favicon():
     return url_for('static', filename='favicon.ico')
 
 
-@app.route('/webhook', methods=['POST'])
+@ app.route('/webhook', methods=['POST'])
 def webhook():
     # X-Hub-Signature-256: sha256=<hash>
     sig_header = 'X-Hub-Signature-256'
@@ -382,7 +392,7 @@ def webhook():
 # regenerate DB
 
 
-@app.route("/regen/", methods=["GET"])
+@ app.route("/regen/", methods=["GET"])
 def regen():
     db.drop_all()
     db.create_all()
