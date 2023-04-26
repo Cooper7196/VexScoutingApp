@@ -28,17 +28,17 @@
             <tr>
                 <td>{{ match['time'] }}</td>
                 <td>{{ match['name'] }}</td>
-                <td class="{{'font-weight-bold ' if match['red'][0].name == curTeam.name else '' }}">
-                    <a class="text-danger" href="/team/{{ match['red'][0].name }}/">{{ match['red'][0].name }}</a>
+                <td class="{{'fw-bold ' if match['red'][0].number == curTeam.number else '' }}">
+                    <a class="text-danger" href="/team/{{ match['red'][0].number }}/">{{ match['red'][0].number }}</a>
                 </td>
-                <td class="{{'font-weight-bold ' if match['red'][1].name == curTeam.name else '' }}">
-                    <a class="text-danger" href="/team/{{ match['red'][1].name }}/">{{ match['red'][1].name }}</a>
+                <td class="{{'fw-bold ' if match['red'][1].number == curTeam.number else '' }}">
+                    <a class="text-danger" href="/team/{{ match['red'][1].number }}/">{{ match['red'][1].number }}</a>
                 </td>
-                <td class="{{'font-weight-bold ' if match['blue'][0].name == curTeam.name else '' }}">
-                    <a class="text-primary" href="/team/{{ match['blue'][0].name }}/">{{ match['blue'][0].name }}</a>
+                <td class="{{'fw-bold ' if match['blue'][0].number == curTeam.number else '' }}">
+                    <a class="text-primary" href="/team/{{ match['blue'][0].number }}/">{{ match['blue'][0].number }}</a>
                 </td>
-                <td class="{{'font-weight-bold ' if match['blue'][1].name == curTeam.name else '' }}">
-                    <a class="text-primary" href="/team/{{ match['blue'][1].name }}/">{{ match['blue'][1].name }}</a>
+                <td class="{{'fw-bold ' if match['blue'][1].number == curTeam.number else '' }}">
+                    <a class="text-primary" href="/team/{{ match['blue'][1].number }}/">{{ match['blue'][1].number }}</a>
                 </td>
                 <td>{{ match['odds'] }}</td>
             </tr>

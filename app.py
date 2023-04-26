@@ -12,7 +12,7 @@ import requests
 from flask import Flask, redirect, render_template, request, url_for
 from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
-from openskill import create_rating, predict_win
+from openskill import create_rating, predict_win, Rating
 from requests.structures import CaseInsensitiveDict
 
 from odds import get_odds
@@ -22,6 +22,7 @@ project_dir = os.path.dirname(os.path.abspath(__file__))
 database_file = "sqlite:///{}".format(os.path.join(project_dir, "database.db"))
 app.config["SQLALCHEMY_DATABASE_URI"] = database_file
 db = SQLAlchemy(app)
+trueSkillData = {}
 # Check if teams have been loaded
 
 
@@ -109,7 +110,7 @@ def load_teams_data():
                 teamSkillsData = ["N/A"] * 14
                 teamSkillsData[13] = teamInfo.region
                 teamSkillsData[11] = teamInfo.name
-            teanTrueSkill = trueSkillData.get(row[0], "N/A")
+            teamTrueSkill = trueSkillData.get(row[0], "N/A")
             team = Team(
                 skills_rank=teamSkillsData[0],
                 skills_score_overall=teamSkillsData[1],
@@ -117,7 +118,7 @@ def load_teams_data():
                 skills_score_driver=teamSkillsData[3],
                 number=row[0],
                 name=teamSkillsData[11],
-                true_skill=teanTrueSkill,
+                true_skill=teamTrueSkill,
                 region=teamSkillsData[13],
                 division=row[1],
                 ccwm=teamCCWMData["CCWM"],
@@ -168,20 +169,25 @@ def load_teams_data():
 
 
 def get_prediction(match):
-    result = predict_win(
+    for team in match['red']:
+        if  isinstance(team.true_skill, str):
+            team.true_skill = [Rating().mu, Rating().sigma]
+    for team in match['blue']:
+        if isinstance(team.true_skill, str):
+            team.true_skill = [Rating().mu, Rating().sigma]
+    return predict_win(
         [
             [
-                teams[match['red'][0].name],
-                teams[match['red'][1].name]],
+                create_rating(match['red'][0].true_skill),
+                create_rating(match['red'][1].true_skill)
+            ],
             [
-                teams[match['blue'][0].name],
-                teams[match['blue'][1].name]
+                create_rating(match['blue'][0].true_skill),
+                create_rating(match['blue'][1].true_skill),
             ]
-        ])
-    return {
-        "winner": "Blue" if result[0] > result[1] else "Red",
-        "odds": float(f"{max(result) * 100:.1f}"),
-    }
+        ]
+    )
+    
 
 
 def add_team(team):
@@ -227,6 +233,7 @@ def get_matches(team):
             "event": "49725",
         }
     )['data']
+    print(team.id)
     for match in data:
         tempMatch = {
 
@@ -241,7 +248,7 @@ def get_matches(team):
             for team in alliance['teams']:
                 team = team['team']
                 tempMatch[alliance['color']].append(
-                    Team(name=team['name'], id=team['id']))
+                    get_team(team['name']))
         matches.append(tempMatch)
     return matches
 
@@ -296,15 +303,20 @@ def view_team(teamNumber):
         print(e)
         return render_template("error.html", error="Team is not in VRC")
     matchOdds = []
-    # for match in matches:
-    #     color = "red" if team.number in match['red'] else "blue"
-    #     results = get_prediction(match)
-    #     match['odds'] = f"{results['odds']}% chance you {'win' if get_color(team, match) == results['winner'] else 'lose'}"
-    #     matchOdds.append(
-    #         (100 if get_color(
-    #             team,
-    #             match) != results['winner'] else results['odds'] * 2) -
-    #         results['odds'])
+    print(matches)
+    for match in matches:
+        print(team)
+        color = "red" if team in match['red'] else "blue"
+        print(match, color)
+        results = get_prediction(match)
+        odds = results[0] if color == "red" else results[1]
+        match['odds'] = f"{round(odds * 100, 1)}% chance you win"
+        # matchOdds.append(odds)
+        # matchOdds.append(
+        #     (100 if get_color(
+        #         team,
+        #         match) != results['winner'] else results['odds'] * 2) -
+        #     results['odds'])
     # print(get_odds(matchOdds))
     # print(matchOdds)
     # awards = dict(reversed(awards.items()))
