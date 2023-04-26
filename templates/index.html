@@ -167,6 +167,12 @@
                 data.sort(function (a, b) {
                     a = a[sortName];
                     b = b[sortName];
+                    if (a == "N/A") {
+                        a = Number.NEGATIVE_INFINITY;
+                    }
+                    if (b == "N/A") {
+                        b = Number.NEGATIVE_INFINITY;
+                    }
                     a = parseFloat(a);
                     b = parseFloat(b);
                     return a - b;
