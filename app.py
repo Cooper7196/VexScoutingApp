@@ -236,14 +236,14 @@ def get_matches(team):
     print(team.id)
     for match in data:
         tempMatch = {
-
-            'time': "N/A" if not match['scheduled'] else datetime.strptime(
-                match['scheduled'],
-                "%Y-%m-%dT%H:%M:%S%z").strftime("%B %#d at %#I:%M %p"),
-
+    'time': "N/A" if not match['scheduled'] else (datetime.strptime(
+        match['scheduled'],
+        "%Y-%m-%dT%H:%M:%S%z") -
+        timedelta(
+            hours=1)).strftime("%B %#d at %#I:%M %p"),
             'name': match['name'],
             'red': [],
-            'blue': []}
+             'blue': []}
         for alliance in match['alliances']:
             for team in alliance['teams']:
                 team = team['team']
@@ -305,19 +305,17 @@ def view_team(teamNumber):
     matchOdds = []
     print(matches)
     for match in matches:
-        print(team)
         color = "red" if team in match['red'] else "blue"
-        print(match, color)
         results = get_prediction(match)
         odds = results[0] if color == "red" else results[1]
         match['odds'] = f"{round(odds * 100, 1)}% chance you win"
-        # matchOdds.append(odds)
+        matchOdds.append(odds * 100)
         # matchOdds.append(
         #     (100 if get_color(
         #         team,
         #         match) != results['winner'] else results['odds'] * 2) -
         #     results['odds'])
-    # print(get_odds(matchOdds))
+    print(get_odds(matchOdds))
     # print(matchOdds)
     # awards = dict(reversed(awards.items()))
     return render_template(
