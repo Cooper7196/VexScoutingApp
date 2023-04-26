@@ -201,7 +201,7 @@ def get_team(number):
 
 def team_name_to_team(number):
     teamData = api_get("teams", params={"number": number})['data'][0]
-    print(teamData['number'] + " " + str(teamData["id"]))
+    # print(teamData['number'] + " " + str(teamData["id"]))
     team = Team(
         number=teamData['number'],
         id=teamData['id'],
@@ -307,7 +307,7 @@ def view_team(teamNumber):
         print(e)
         return render_template("error.html", error="Team is not in VRC")
     matchOdds = []
-    print(matches)
+    # print(matches)
     for match in matches:
         color = "red" if team in match['red'] else "blue"
         results = get_prediction(match)
@@ -319,7 +319,7 @@ def view_team(teamNumber):
         #         team,
         #         match) != results['winner'] else results['odds'] * 2) -
         #     results['odds'])
-    print(get_odds(matchOdds))
+    # print(get_odds(matchOdds))
     # print(matchOdds)
     # awards = dict(reversed(awards.items()))
     return render_template(
