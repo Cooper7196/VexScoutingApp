@@ -212,7 +212,11 @@ def team_name_to_team(number):
 
 
 def get_team_id(team):
-    return api_get("teams", params={"number": team.number})['data'][0]['id']
+    return api_get(
+        "teams",
+        params={
+            "number": team.number,
+            "program": 1})['data'][0]['id']
 
 
 def get_color(team, match):
