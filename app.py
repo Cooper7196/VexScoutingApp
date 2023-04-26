@@ -140,7 +140,7 @@ def load_teams_data():
     #     reader=csv.reader(f)
     #     next(reader)
     #     for row in reader:
-    #         # print(row[10])
+    #         # F(row[10])
     #         try:
     #             team=Team(
     #                 skills_rank=row[0],
@@ -195,7 +195,7 @@ def get_team(number):
 
 def team_name_to_team(number):
     teamData = api_get("teams", params={"number": number})['data'][0]
-    print(teamData['number'] + " " + teamData["id"])
+    print(teamData['number'] + " " + str(teamData["id"]))
     team = Team(
         number=teamData['number'],
         id=teamData['id'],
