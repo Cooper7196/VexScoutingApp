@@ -80,14 +80,15 @@ def load_teams_data():
 
     divisions = {}
     skillsData = {}
-    with open("world-skill-standings-hs.csv", encoding="utf8") as f:
-        reader = csv.reader(f)
-        next(reader)
-        for row in reader:
-            # print(row[10])
-            if row[13] == "Chinese Taipei":
-                row[13] = "Taiwan"
-            skillsData[row[10]] = row
+    for age_group in ["hs", "ms"]:
+        with open(f"world-skill-standings-{age_group}.csv", encoding="utf8") as f:
+            reader = csv.reader(f)
+            next(reader)
+            for row in reader:
+                # print(row[10])
+                if row[13] == "Chinese Taipei":
+                    row[13] = "Taiwan"
+                skillsData[row[10]] = row
 
     with open("CCWM.json", "r") as f:
         ccwmData = json.load(f)
@@ -96,40 +97,42 @@ def load_teams_data():
     with open("matches.json", "r") as f:
         matchesData = json.load(f)
 
-    with open("VRC-HS-Divisions.csv", encoding="utf8") as f:
-        reader = csv.reader(f)
-        next(reader)
-        for row in reader:
-            divisions[row[0]] = row[1]
-            teamCCWMData = ccwmData.get(
-                row[0], {"CCWM": "N/A", "OPR": "N/A", "DPR": "N/A"})
-            teamWinrateData = winrateData.get(row[0], (0, 0, 0))
-            teamSkillsData = skillsData.get(row[0], None)
-            if teamSkillsData is None:
-                teamInfo = team_name_to_team(row[0])
-                teamSkillsData = ["N/A"] * 14
-                teamSkillsData[13] = teamInfo.region
-                teamSkillsData[11] = teamInfo.name
-            teamTrueSkill = trueSkillData.get(row[0], "N/A")
-            team = Team(
-                skills_rank=teamSkillsData[0],
-                skills_score_overall=teamSkillsData[1],
-                skills_score_autonomous=teamSkillsData[2],
-                skills_score_driver=teamSkillsData[3],
-                number=row[0],
-                name=teamSkillsData[11],
-                true_skill=teamTrueSkill,
-                region=teamSkillsData[13],
-                division=row[1],
-                ccwm=teamCCWMData["CCWM"],
-                opr=teamCCWMData["OPR"],
-                dpr=teamCCWMData["DPR"],
-                win_count=teamWinrateData[0],
-                loss_count=teamWinrateData[1],
-                tie_count=teamWinrateData[2],
-                age_group="high-school",
-            )
-            add_team(team)
+    for age_group in ["high-school", "middle-school"]:
+        with open("VRC-HS-Divisions.csv" if age_group == "high-school" else "VRC-MS-Divisions.csv", encoding="utf8") as f:
+            reader = csv.reader(f)
+            next(reader)
+            for row in reader:
+                divisions[row[0]] = row[1]
+                teamCCWMData = ccwmData.get(
+                    row[0], {"CCWM": "N/A", "OPR": "N/A", "DPR": "N/A"})
+                teamWinrateData = winrateData.get(row[0], (0, 0, 0))
+                teamSkillsData = skillsData.get(row[0], None)
+                if teamSkillsData is None:
+                    teamInfo = team_name_to_team(row[0])
+                    time.sleep(1)
+                    teamSkillsData = ["N/A"] * 14
+                    teamSkillsData[13] = teamInfo.region
+                    teamSkillsData[11] = teamInfo.name
+                teamTrueSkill = trueSkillData.get(row[0], "N/A")
+                team = Team(
+                    skills_rank=teamSkillsData[0],
+                    skills_score_overall=teamSkillsData[1],
+                    skills_score_autonomous=teamSkillsData[2],
+                    skills_score_driver=teamSkillsData[3],
+                    number=row[0],
+                    name=teamSkillsData[11],
+                    true_skill=teamTrueSkill,
+                    region=teamSkillsData[13],
+                    division=row[1],
+                    ccwm=teamCCWMData["CCWM"],
+                    opr=teamCCWMData["OPR"],
+                    dpr=teamCCWMData["DPR"],
+                    win_count=teamWinrateData[0],
+                    loss_count=teamWinrateData[1],
+                    tie_count=teamWinrateData[2],
+                    age_group=age_group,
+                )
+                add_team(team)
 
     # with open("VRC-MS-Divisions.csv", encoding="utf8") as f:
     #     reader=csv.reader(f)
