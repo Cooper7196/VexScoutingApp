@@ -237,7 +237,7 @@ def get_matches(team):
     data = api_get(
         f"teams/{team.id}/matches",
         params={
-            "event": "49725",
+            "event": "49725" if team.age_group == "high-school" else "49726",
         }
     )['data']
     print(team.id)
