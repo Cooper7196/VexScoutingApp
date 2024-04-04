@@ -24,6 +24,7 @@ project_dir = os.path.dirname(os.path.abspath(__file__))
 database_file = "sqlite:///{}".format(os.path.join(project_dir, "database.db"))
 app.config["SQLALCHEMY_DATABASE_URI"] = database_file
 db = SQLAlchemy(app)
+trueSkillData = {}
 # Check if teams have been loaded
 
 
@@ -205,7 +206,7 @@ def load_teams_data():
     #     reader=csv.reader(f)
     #     next(reader)
     #     for row in reader:
-    #         # print(row[10])
+    #         # F(row[10])
     #         try:
     #             team=Team(
     #                 skills_rank=row[0],
@@ -296,16 +297,17 @@ def get_matches(team):
             "event": "53690" if team.age_group == "high-school" else "53691",
         }
     )['data']
+    print(team.id)
     for match in data:
         tempMatch = {
-
-            'time': "N/A" if not match['scheduled'] else datetime.strptime(
-                match['scheduled'],
-                "%Y-%m-%dT%H:%M:%S%z").strftime("%B %#d at %#I:%M %p"),
-
+    'time': "N/A" if not match['scheduled'] else (datetime.strptime(
+        match['scheduled'],
+        "%Y-%m-%dT%H:%M:%S%z") -
+        timedelta(
+            hours=1)).strftime("%B %#d at %#I:%M %p"),
             'name': match['name'],
             'red': [],
-            'blue': []}
+             'blue': []}
         for alliance in match['alliances']:
             for team in alliance['teams']:
                 team = team['team']
