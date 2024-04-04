@@ -58,8 +58,6 @@
                                         <th data-field="score" data-sortable="true" data-searchable="false">Skills Score</th>
                                         <th data-field="true_skill" data-sortable="true" data-searchable="false">True Skill</th>
                                         <th data-field="ccwm" data-sortable="true" data-searchable="false">CCWM</th>
-                                        <th data-field="opr" data-sortable="true" data-searchable="false">OPR</th>
-                                        <th data-field="dpr" data-sortable="true" data-searchable="false">DPR</th>
                                         <th data-field="wlt" data-sortable="false" data-searchable="false">Win/Loss/Tie</th>
                                         <th data-field="win_rate" data-sortable="true" data-searchable="false">Win Rate</th>
                                     </tr>
@@ -75,40 +73,18 @@
                                             <td>{{ team.region }}</td>
                                             <td>{{ (team.skills_rank) }}</td>
                                             <td>{{ team.skills_score_overall }}</td>
-                                            {% if team.true_skill != "N/A" %}
-                                                <td>{{ (team.true_skill[0] - (3 * team.true_skill[1]))|round(1) }}</td>
-                                            {% else %}
-                                                <td>{{ team.true_skill }}</td>
-                                            {% endif %}
+                                            <td>{{ team.true_skill }}</td>
                                             {% if team.ccwm != "N/A" %}
-                                                <td>{{ team.ccwm| round(1) }}</td>
-                                                <td>{{ team.opr | round(1) }}</td>
-                                                <td>{{ team.dpr | round(1) }}</td>
+                                                <td>{{ team.ccwm | round(1) }}</td>
                                             {% else %}
-                                                <td>
-                                                    {{ team.ccwm }}
-                                                </td>
-                                                <td>
-                                                    {{ team.opr }}
-                                                </td>
-                                                <td>
-                                                    {{ team.dpr }}
-                                                </td>
+                                                <td>{{ team.ccwm }}</td>
                                             {% endif %}
                                             {% if team.win_count != "N/A" and (team.win_count + team.loss_count + team.tie_count) > 0 %}
-                                                <td>
-                                                    {{ team.win_count }} / {{ team.loss_count }} / {{ team.tie_count }}
-                                                </td>
-                                                <td>
-                                                    {{ ((team.win_count / (team.win_count + team.loss_count + team.tie_count)) * 100) | round(1) }}%
-                                                </td>
+                                                <td>{{ team.win_count }} / {{ team.loss_count }} / {{ team.tie_count }}</td>
+                                                <td>{{ ((team.win_count / (team.win_count + team.loss_count + team.tie_count)) * 100) | round(1) }}%</td>
                                             {% else %}
-                                                <td>
-                                                    {{ team.win_count }}
-                                                </td>
-                                                <td>
-                                                    {{ team.win_count }}
-                                                </td>
+                                                <td>{{ team.win_count }}</td>
+                                                <td>{{ team.win_count }}</td>
                                             {% endif %}
                                         </tr>
                                     {% endfor %}
@@ -164,13 +140,29 @@
                 }                
             }
             else{
+                console.log(sortName, sortOrder)
                 data.sort(function (a, b) {
                     a = a[sortName];
                     b = b[sortName];
                     a = parseFloat(a);
                     b = parseFloat(b);
+                    if (sortName === 'rank') {
+                        if (isNaN(a)) {
+                            return 1;
+                        }
+                        if (isNaN(b)) {
+                            return -1;
+                        }
+                    }
+                    if (isNaN(a)) {
+                        return -1;
+                    }
+                    if (isNaN(b)) {
+                        return 1;
+                    }
                     return a - b;
                 });
+                console.log(data)
                 if (sortOrder === 'desc') {
                     data.reverse();
                 }

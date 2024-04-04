@@ -5,16 +5,18 @@ import json
 import os
 import threading
 import time
-import config
 from datetime import datetime, timedelta
 
+import pandas as pd
 import requests
+from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask, redirect, render_template, request, url_for
 from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
-from openskill import create_rating, predict_win
+from openskill import create_rating, predict_win, Rating
 from requests.structures import CaseInsensitiveDict
 
+import config
 from odds import get_odds
 
 app = Flask(__name__)
@@ -36,6 +38,7 @@ def api_get(url, params={}):
         url,
         headers=headers,
         params=params)
+    print(r.url)
     if r.status_code != 200:
         raise Exception(f"API Error: {r.status_code} {r.text}")
     return r.json()
@@ -73,62 +76,124 @@ class Comment(db.Model):
 
 
 def load_teams_data():
-    with open("trueSkill.json", "r") as f:
-        trueSkillData = json.load(f)
-        trueSkillData = {team[0]: team[1] for team in trueSkillData}
 
-    divisions = {}
+    # with open("trueSkill.json", "r") as f:
+    #     trueSkillData = json.load(f)
+    #     trueSkillData = {team[0]: team[1] for team in trueSkillData}
+    # with open("CCWM.json", "r") as f:
+    #     ccwmData = json.load(f)
+    # with open("winrate.json", "r") as f:
+    #     winrateData = json.load(f)
+
+    performanceData = {}
+    defaultPerformanceData = {
+        "True Skill": "N/A",
+        "CCWM": "N/A",
+        "Total Wins": 0,
+        "Total Losses": 0,
+        "Total Ties": 0,
+    }
+
+    xl_file = pd.read_excel("vrc-data-analysis.xlsx")
+
+    for row in xl_file.itertuples():
+        if row.teamNumber == "55692B":
+            print(row)
+        if row.ccwm != row.ccwm:
+            performanceData[row.teamNumber] = defaultPerformanceData
+            continue
+        performanceData[row.teamNumber] = {
+            "True Skill": "N/A" if row.trueskill == "N/A" else float(row.trueskill),
+            "CCWM": "N/A" if row.ccwm == "N/A" else float(row.ccwm),
+            "Total Wins": row.totalWins,
+            "Total Losses": row.totalLosses,
+            "Total Ties": row.totalTies,
+        }
+
     skillsData = {}
-    with open("world-skill-standings-hs.csv", encoding="utf8") as f:
-        reader = csv.reader(f)
-        next(reader)
-        for row in reader:
-            # print(row[10])
-            if row[13] == "Chinese Taipei":
-                row[13] = "Taiwan"
-            skillsData[row[10]] = row
+    for age_group in ["hs", "ms"]:
+        with open(f"world-skill-standings-{age_group}.csv", encoding="utf8") as f:
+            reader = csv.DictReader(f)
+            next(reader)
+            for row in reader:
+                # print(row[10])
+                if row['Event Region'] == "Chinese Taipei":
+                    row['Event Region'] = "Taiwan"
+                skillsData[row['Team Number']] = row
 
-    with open("CCWM.json", "r") as f:
-        ccwmData = json.load(f)
-    with open("winrate.json", "r") as f:
-        winrateData = json.load(f)
-    with open("matches.json", "r") as f:
-        matchesData = json.load(f)
+    # with open("matches.json", "r") as f:
+    #     matchesData = json.load(f)
+    divisions = {"high-school": ["Math", "Technology", "Science", "Engineering",
+                 "Arts", "Innovate", "Spirit", "Design", "Research", "Opportunity"],
+                 "middle-school": ["Science", "Technology", "Engineering", "Math", "Arts", "Opportunity"]}
 
-    with open("VRC-HS-Divisions.csv", encoding="utf8") as f:
-        reader = csv.reader(f)
-        next(reader)
-        for row in reader:
-            divisions[row[0]] = row[1]
-            teamCCWMData = ccwmData.get(
-                row[0], {"CCWM": "N/A", "OPR": "N/A", "DPR": "N/A"})
-            teamWinrateData = winrateData.get(row[0], (0, 0, 0))
-            teamSkillsData = skillsData.get(row[0], None)
+    for age_group in ["high-school", "middle-school"]:
+        teams = get_worlds_teams(age_group)
+        for index, teamNum in enumerate(teams):
+            teamSkillsData = skillsData.get(teamNum, None)
             if teamSkillsData is None:
-                teamInfo = team_name_to_team(row[0])
-                teamSkillsData = ["N/A"] * 14
-                teamSkillsData[13] = teamInfo.region
-                teamSkillsData[11] = teamInfo.name
-            teanTrueSkill = trueSkillData.get(row[0], "N/A")
+                print(teamNum)
+                teamInfo = team_name_to_team(teamNum)
+                teamSkillsData = {}
+                teamSkillsData['Event Region'] = teamInfo.region
+                teamSkillsData['Team Name'] = teamInfo.name
             team = Team(
-                skills_rank=teamSkillsData[0],
-                skills_score_overall=teamSkillsData[1],
-                skills_score_autonomous=teamSkillsData[2],
-                skills_score_driver=teamSkillsData[3],
-                number=row[0],
-                name=teamSkillsData[11],
-                true_skill=teanTrueSkill,
-                region=teamSkillsData[13],
-                division=row[1],
-                ccwm=teamCCWMData["CCWM"],
-                opr=teamCCWMData["OPR"],
-                dpr=teamCCWMData["DPR"],
-                win_count=teamWinrateData[0],
-                loss_count=teamWinrateData[1],
-                tie_count=teamWinrateData[2],
-                age_group="high-school",
+                skills_rank=teamSkillsData.get('Rank', "N/A"),
+                skills_score_overall=teamSkillsData.get("Score", "N/A"),
+                skills_score_autonomous=teamSkillsData.get(
+                    'Autonomous Coding Skills', "N/A"),
+                skills_score_driver=teamSkillsData.get("Driver Skills", "N/A"),
+                number=teamNum,
+                name=teamSkillsData.get('Team Name', "N/A"),
+                true_skill=performanceData.get(teamNum, defaultPerformanceData)[
+                    "True Skill"],
+                region=teamSkillsData.get('Event Region', "N/A"),
+                division=divisions[age_group][index %
+                                              len(divisions[age_group])],
+                ccwm=performanceData.get(teamNum, defaultPerformanceData)["CCWM"],
+                win_count=performanceData.get(teamNum, defaultPerformanceData)[
+                    "Total Wins"],
+                loss_count=performanceData.get(teamNum, defaultPerformanceData)[
+                    "Total Losses"],
+                tie_count=performanceData.get(teamNum, defaultPerformanceData)[
+                    "Total Ties"],
+                age_group=age_group,
             )
             add_team(team)
+    # with open("VRC-HS-Divisions.csv", encoding="utf8") as f:
+    #     reader = csv.reader(f)
+    #     next(reader)
+    #     for row in reader:
+    #         divisions[row[0]] = row[1]
+    #         teamCCWMData = ccwmData.get(
+    #             row[0], {"CCWM": "N/A", "OPR": "N/A", "DPR": "N/A"})
+    #         teamWinrateData = winrateData.get(row[0], (0, 0, 0))
+    #         teamSkillsData = skillsData.get(row[0], None)
+    #         if teamSkillsData is None:
+    #             teamInfo = team_name_to_team(row[0])
+    #             teamSkillsData = ["N/A"] * 14
+    #             teamSkillsData[13] = teamInfo.region
+    #             teamSkillsData[11] = teamInfo.name
+    #         teanTrueSkill = trueSkillData.get(row[0], "N/A")
+    #         team = Team(
+    #             skills_rank=teamSkillsData[0],
+    #             skills_score_overall=teamSkillsData[1],
+    #             skills_score_autonomous=teamSkillsData[2],
+    #             skills_score_driver=teamSkillsData[3],
+    #             number=row[0],
+    #             name=teamSkillsData[11],
+    #             true_skill=teanTrueSkill,
+    #             region=teamSkillsData[13],
+    #             division=row[1],
+    #             ccwm=teamCCWMData["CCWM"],
+    #             opr=teamCCWMData["OPR"],
+    #             dpr=teamCCWMData["DPR"],
+    #             win_count=teamWinrateData[0],
+    #             loss_count=teamWinrateData[1],
+    #             tie_count=teamWinrateData[2],
+    #             age_group="high-school",
+    #         )
+    #         add_team(team)
 
     # with open("VRC-MS-Divisions.csv", encoding="utf8") as f:
     #     reader=csv.reader(f)
@@ -168,20 +233,24 @@ def load_teams_data():
 
 
 def get_prediction(match):
-    result = predict_win(
+    for team in match['red']:
+        if isinstance(team.true_skill, str):
+            team.true_skill = [Rating().mu, Rating().sigma]
+    for team in match['blue']:
+        if isinstance(team.true_skill, str):
+            team.true_skill = [Rating().mu, Rating().sigma]
+    return predict_win(
         [
             [
-                teams[match['red'][0].name],
-                teams[match['red'][1].name]],
+                create_rating(match['red'][0].true_skill),
+                create_rating(match['red'][1].true_skill)
+            ],
             [
-                teams[match['blue'][0].name],
-                teams[match['blue'][1].name]
+                create_rating(match['blue'][0].true_skill),
+                create_rating(match['blue'][1].true_skill),
             ]
-        ])
-    return {
-        "winner": "Blue" if result[0] > result[1] else "Red",
-        "odds": float(f"{max(result) * 100:.1f}"),
-    }
+        ]
+    )
 
 
 def add_team(team):
@@ -195,7 +264,7 @@ def get_team(number):
 
 def team_name_to_team(number):
     teamData = api_get("teams", params={"number": number})['data'][0]
-    print(teamData['number'] + " " + teamData["id"])
+    print(f"{teamData['number']} {teamData['id']}")
     team = Team(
         number=teamData['number'],
         id=teamData['id'],
@@ -206,7 +275,7 @@ def team_name_to_team(number):
 
 
 def get_team_id(team):
-    return api_get("teams", params={"number": team.number})['data'][0]['id']
+    return api_get("teams", params={"number": team.number, "program": 1})['data'][0]['id']
 
 
 def get_color(team, match):
@@ -224,7 +293,7 @@ def get_matches(team):
     data = api_get(
         f"teams/{team.id}/matches",
         params={
-            "event": "49725",
+            "event": "53690" if team.age_group == "high-school" else "53691",
         }
     )['data']
     for match in data:
@@ -241,7 +310,7 @@ def get_matches(team):
             for team in alliance['teams']:
                 team = team['team']
                 tempMatch[alliance['color']].append(
-                    Team(name=team['name'], id=team['id']))
+                    get_team(team['name']))
         matches.append(tempMatch)
     return matches
 
@@ -251,7 +320,7 @@ def get_awards(team):
     data = api_get(
         f"teams/{team.id}/awards",
         params={
-            "season": "173",
+            "season": "181",
         }
     )['data']
     for award in data:
@@ -296,15 +365,17 @@ def view_team(teamNumber):
         print(e)
         return render_template("error.html", error="Team is not in VRC")
     matchOdds = []
-    # for match in matches:
-    #     color = "red" if team.number in match['red'] else "blue"
-    #     results = get_prediction(match)
-    #     match['odds'] = f"{results['odds']}% chance you {'win' if get_color(team, match) == results['winner'] else 'lose'}"
-    #     matchOdds.append(
-    #         (100 if get_color(
-    #             team,
-    #             match) != results['winner'] else results['odds'] * 2) -
-    #         results['odds'])
+    for match in matches:
+        color = "red" if team in match['red'] else "blue"
+        results = get_prediction(match)
+        odds = results[0] if color == "red" else results[1]
+        match['odds'] = f"{round(odds * 100, 1)}% chance you win"
+        matchOdds.append(odds * 100)
+        # matchOdds.append(
+        #     (100 if get_color(
+        #         team,
+        #         match) != results['winner'] else results['odds'] * 2) -
+        #     results['odds'])
     # print(get_odds(matchOdds))
     # print(matchOdds)
     # awards = dict(reversed(awards.items()))
@@ -389,26 +460,71 @@ def webhook():
                     target=lambda: [time.sleep(2), os._exit(-1)]).start()
     return "ok"
 
+
+def get_worlds_teams(event):
+    age_group_to_event = {
+        "high-school": 53690,
+        "middle-school": 53691
+    }
+    pageNum = 1
+    data = True
+    teams = []
+    while data:
+        data = api_get(
+            f"events/{age_group_to_event[event]}/teams",
+            params={
+                "per_page": 250,
+                "page": pageNum,
+            }
+        )['data']
+        for team in data:
+            teams.append(team['number'])
+        pageNum += 1
+    
+    return teams
+
+    divisions = ["Math", "Technology", "Science", "Engineering",
+                 "Arts", "Innovate", "Spirit", "Design", "Research", "Opportunity"]
+    # Set team divisions
+    for index, teamNum in enumerate(teams):
+        team = Team.query.filter_by(number=teamNum).first()
+        if team:
+            team.division = divisions[index % len(divisions)]
+            db.session.commit()
+        else:
+            # create Team object
+            team = team_name_to_team(teamNum)
+            team.division = divisions[index % len(divisions)]
+            add_team(team)
+
+
 # regenerate DB
-
-
 @ app.route("/regen/", methods=["GET"])
 def regen():
     db.drop_all()
     db.create_all()
     load_teams_data()
+    # update_divisions()
     return redirect(url_for('view_index'))
 
 
-if __name__ == "__main__":
+def regen_task():
     with app.app_context():
-        # db.drop_all()
-        # db.create_all()
-        # if not Team.query.first():
-        #     load_teams_data()
-        pass
+        db.drop_all()
+        db.create_all()
+        load_teams_data()
+
+
+if __name__ == "__main__":
+
     moment = Moment(app)
+
     if os.environ.get('ENV') == 'prod':
         app.run(host="0.0.0.0", port=80)
     else:
-        app.run(debug=True, host="127.0.0.1", port=5001)
+        app.run(debug=False, host="0.0.0.0", port=5001)
+
+if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+    scheduler = BackgroundScheduler()
+    job = scheduler.add_job(regen_task, 'interval', minutes=5)
+    scheduler.start()
