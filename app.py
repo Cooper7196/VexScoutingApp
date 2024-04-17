@@ -138,6 +138,7 @@ def load_teams_data():
                 teamSkillsData = {}
                 teamSkillsData['Event Region'] = teamInfo.region
                 teamSkillsData['Team Name'] = teamInfo.name
+                time.sleep(0.2)
             team = Team(
                 skills_rank=teamSkillsData.get('Rank', "N/A"),
                 skills_score_overall=teamSkillsData.get("Score", "N/A"),
@@ -524,7 +525,7 @@ if __name__ == "__main__":
     if os.environ.get('ENV') == 'prod':
         app.run(host="0.0.0.0", port=80)
     else:
-        app.run(debug=False, host="0.0.0.0", port=5001)
+        app.run(debug=True, host="0.0.0.0", port=5001)
 
 if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
     scheduler = BackgroundScheduler()
