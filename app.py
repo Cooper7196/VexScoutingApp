@@ -241,18 +241,20 @@ def get_prediction(match):
     for team in match['blue']:
         if isinstance(team.true_skill, str):
             team.true_skill = [Rating().mu, Rating().sigma]
-    return predict_win(
-        [
-            [
-                create_rating(match['red'][0].true_skill),
-                create_rating(match['red'][1].true_skill)
-            ],
-            [
-                create_rating(match['blue'][0].true_skill),
-                create_rating(match['blue'][1].true_skill),
-            ]
-        ]
-    )
+    print("test", match['red'][0].true_skill, match['red'][1].true_skill)
+    return [0, 0]
+    # return predict_win(
+    #     [
+    #         [
+    #             create_rating(match['red'][0].true_skill),
+    #             create_rating(match['red'][1].true_skill)
+    #         ],
+    #         [
+    #             create_rating(match['blue'][0].true_skill),
+    #             create_rating(match['blue'][1].true_skill),
+    #         ]
+    #     ]
+    # )
 
 
 def add_team(team):
