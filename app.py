@@ -95,16 +95,14 @@ def load_teams_data():
         "Total Ties": 0,
     }
 
-    xl_file = pd.read_excel("vrc-data-analysis.xlsx")
+    xl_file = pd.read_excel("vrc-data-analysis-detailed.xlsx")
 
     for row in xl_file.itertuples():
-        if row.teamNumber == "55692B":
-            print(row)
         if row.ccwm != row.ccwm:
             performanceData[row.teamNumber] = defaultPerformanceData
             continue
         performanceData[row.teamNumber] = {
-            "True Skill": "N/A" if row.trueskill == "N/A" else float(row.trueskill),
+            "True Skill": "N/A" if row.trueskill == "N/A" else [float(row.mu), float(row.tsSigma)],
             "CCWM": "N/A" if row.ccwm == "N/A" else float(row.ccwm),
             "Total Wins": row.totalWins,
             "Total Losses": row.totalLosses,
@@ -242,19 +240,18 @@ def get_prediction(match):
         if isinstance(team.true_skill, str):
             team.true_skill = [Rating().mu, Rating().sigma]
     print("test", match['red'][0].true_skill, match['red'][1].true_skill)
-    return [0, 0]
-    # return predict_win(
-    #     [
-    #         [
-    #             create_rating(match['red'][0].true_skill),
-    #             create_rating(match['red'][1].true_skill)
-    #         ],
-    #         [
-    #             create_rating(match['blue'][0].true_skill),
-    #             create_rating(match['blue'][1].true_skill),
-    #         ]
-    #     ]
-    # )
+    return predict_win(
+        [
+            [
+                create_rating(match['red'][0].true_skill),
+                create_rating(match['red'][1].true_skill)
+            ],
+            [
+                create_rating(match['blue'][0].true_skill),
+                create_rating(match['blue'][1].true_skill),
+            ]
+        ]
+    )
 
 
 def add_team(team):

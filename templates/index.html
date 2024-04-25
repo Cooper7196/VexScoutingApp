@@ -73,7 +73,11 @@
                                             <td>{{ team.region }}</td>
                                             <td>{{ (team.skills_rank) }}</td>
                                             <td>{{ team.skills_score_overall }}</td>
-                                            <td>{{ team.true_skill }}</td>
+                                            {% if team.true_skill != "N/A" %}
+                                                <td>{{ (team.true_skill[0] - (3 * team.true_skill[1]))|round(1) }}</td>
+                                            {% else %}
+                                                <td>{{ team.true_skill }}</td>
+                                            {% endif %}
                                             {% if team.ccwm != "N/A" %}
                                                 <td>{{ team.ccwm | round(1) }}</td>
                                             {% else %}
