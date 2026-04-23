@@ -284,13 +284,48 @@ async function showTeam(number) {
   loadAwards(team, event);
 }
 
+// ---------- match-win prediction (TrueSkill, 2-alliance) ----------
+const OS_BETA = 25 / 6;  // openskill default
+
+function normalCdf(x) {
+  // Abramowitz & Stegun 7.1.26
+  const t = 1 / (1 + 0.2316419 * Math.abs(x));
+  const d = 0.3989422804 * Math.exp(-x * x / 2);
+  const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.7814779 + t * (-1.821256 + t * 1.3302744))));
+  return x > 0 ? 1 - p : p;
+}
+
+function allianceRating(teamNums) {
+  let mu = 0, sigma2 = 0, known = 0;
+  for (const n of teamNums) {
+    const st = (BY_NUMBER[n] && BY_NUMBER[n].team.stats) || {};
+    if (st.mu != null) {
+      mu += st.mu;
+      sigma2 += (st.sigma || 0) ** 2;
+      known++;
+    } else {
+      mu += 25;
+      sigma2 += (25 / 3) ** 2;
+    }
+  }
+  return { mu, sigma2, known };
+}
+
+function predictRed(redNums, blueNums) {
+  const R = allianceRating(redNums);
+  const B = allianceRating(blueNums);
+  if (R.known === 0 && B.known === 0) return null;
+  const delta = R.mu - B.mu;
+  const denom = Math.sqrt(2 * OS_BETA * OS_BETA + R.sigma2 + B.sigma2);
+  return normalCdf(delta / denom);
+}
+
 async function loadMatches(team, event) {
   const tbl = document.getElementById('matches-table');
   try {
     const matches = await reApiAll(`teams/${team.id}/matches`, { 'event[]': event.id });
     matches.sort((a, b) => (a.scheduled || '').localeCompare(b.scheduled || ''));
 
-    // Determine alliance size (V5RC = 2, VURC = 3) from first match's data.
     const allianceSize = matches.length
       ? Math.max(...matches.flatMap(m => m.alliances.map(a => a.teams.length)))
       : 2;
@@ -300,36 +335,76 @@ async function loadMatches(team, event) {
       <th>Name</th>
       ${Array.from({length: allianceSize}, (_, i) => `<th>Red ${i+1}</th>`).join('')}
       ${Array.from({length: allianceSize}, (_, i) => `<th>Blue ${i+1}</th>`).join('')}
+      <th>Prediction</th>
+      <th>Result</th>
     </tr>`;
 
-    const cell = (num, color) => {
+    const cell = (num, color, winner) => {
       const bold = num === team.number ? 'fw-bold ' : '';
       const cls = color === 'red' ? 'text-danger' : 'text-primary';
-      return `<td class="${bold}"><a class="${cls}" href="/team/${encodeURIComponent(num)}/" data-link>${esc(num)}</a></td>`;
+      const winMark = winner === color ? ' text-decoration-underline' : '';
+      return `<td class="${bold}"><a class="${cls}${winMark}" href="/team/${encodeURIComponent(num)}/" data-link>${esc(num)}</a></td>`;
     };
 
     let body;
     if (matches.length === 0) {
-      body = `<tr><td colspan="${2 + allianceSize * 2}">No matches found</td></tr>`;
+      body = `<tr><td colspan="${4 + allianceSize * 2}">No matches found</td></tr>`;
     } else {
       body = matches.map(m => {
         const red = m.alliances.find(a => a.color === 'red');
         const blue = m.alliances.find(a => a.color === 'blue');
         const redNums = red.teams.map(x => x.team.name);
         const blueNums = blue.teams.map(x => x.team.name);
-        while (redNums.length < allianceSize) redNums.push('');
-        while (blueNums.length < allianceSize) blueNums.push('');
+
+        // Has this match been played? Scores are non-null numbers; either side > 0.
+        const played = (red.score != null && blue.score != null && (red.score > 0 || blue.score > 0));
+        const winner = played
+          ? (red.score > blue.score ? 'red' : red.score < blue.score ? 'blue' : 'tie')
+          : null;
+
+        // Prediction from the viewing team's side.
+        const myOnRed = redNums.includes(team.number);
+        const pRed = predictRed(redNums, blueNums);
+        let predCell = '';
+        if (pRed != null) {
+          const pMe = myOnRed ? pRed : (1 - pRed);
+          const pct = (pMe * 100).toFixed(0);
+          const cls = pMe >= 0.5 ? 'text-success' : 'text-muted';
+          predCell = `<span class="${cls}">${pct}%</span>`;
+        } else {
+          predCell = '<span class="text-muted">—</span>';
+        }
+
+        // Result cell from viewing team's side.
+        let resultCell = '';
+        if (played) {
+          const myScore = myOnRed ? red.score : blue.score;
+          const theirScore = myOnRed ? blue.score : red.score;
+          let label, badgeCls;
+          if (winner === 'tie') { label = 'T'; badgeCls = 'bg-secondary'; }
+          else if ((winner === 'red') === myOnRed) { label = 'W'; badgeCls = 'bg-success'; }
+          else { label = 'L'; badgeCls = 'bg-danger'; }
+          resultCell = `<span class="badge ${badgeCls}">${label}</span> ${myScore}–${theirScore}`;
+        }
+
+        const padRed = [...redNums];
+        const padBlue = [...blueNums];
+        while (padRed.length < allianceSize) padRed.push('');
+        while (padBlue.length < allianceSize) padBlue.push('');
+
         return `<tr>
           <td>${esc(fmtMatchTime(m.started || m.scheduled))}</td>
           <td>${esc(m.name)}</td>
-          ${redNums.map(n => n ? cell(n, 'red') : '<td></td>').join('')}
-          ${blueNums.map(n => n ? cell(n, 'blue') : '<td></td>').join('')}
+          ${padRed.map(n => n ? cell(n, 'red', winner) : '<td></td>').join('')}
+          ${padBlue.map(n => n ? cell(n, 'blue', winner) : '<td></td>').join('')}
+          <td>${predCell}</td>
+          <td>${resultCell}</td>
         </tr>`;
       }).join('');
     }
     tbl.innerHTML = header + body;
   } catch (e) {
-    tbl.innerHTML = `<tr><td colspan="7" class="text-danger">Failed to load matches: ${esc(e.message)}</td></tr>`;
+    tbl.innerHTML = `<tr><td colspan="9" class="text-danger">Failed to load matches: ${esc(e.message)}</td></tr>`;
   }
 }
 
