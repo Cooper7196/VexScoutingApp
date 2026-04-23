@@ -54,10 +54,23 @@ function navigate(path) {
 function route() {
   const p = location.pathname.replace(/\/+$/, '') || '/';
   let m;
+  if (p === '/' || p === '') {
+    return showIndex();
+  }
   if ((m = p.match(/^\/team\/([^\/]+)$/))) {
     return showTeam(decodeURIComponent(m[1]).toUpperCase());
   }
-  return showIndex();
+  return showNotFound(location.pathname);
+}
+
+function showNotFound(path) {
+  document.title = '404 — Vex Worlds Scouting';
+  APP.innerHTML = `
+    <div class="container py-5 text-center">
+      <h1 class="display-1 text-muted">404</h1>
+      <p class="lead">Nothing lives at <code>${esc(path)}</code>.</p>
+      <a href="/" data-link class="btn btn-outline-primary mt-2">Back to the team list</a>
+    </div>`;
 }
 
 // ---------- shared: team number sort (from original template) ----------
@@ -473,10 +486,9 @@ async function refreshRankings() {
     }
   }
   await Promise.all(tasks);
-  // If the index is showing, re-render it so Win Rate / W-L-T update live.
-  if (!/^\/team\//.test(location.pathname)) {
-    showIndex();
-  }
+  // Only re-render if we're still on the index; a 404 or team page stays put.
+  const p = location.pathname.replace(/\/+$/, '') || '/';
+  if (p === '/' || p === '') showIndex();
 }
 
 // ---------- boot ----------
