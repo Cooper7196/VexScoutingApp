@@ -2,3 +2,5 @@
 /test.json
 /venv
 /__pycache__
+/cache/
+/.claude/

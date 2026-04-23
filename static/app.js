@@ -98,7 +98,13 @@ window.customSort = customSort;
 
 function rowForTeam(t) {
   const s = t.skills || {};
-  const w = t.wins, l = t.losses, ti = t.ties;
+  const st = t.stats || {};
+  // W/L/T = pre-Worlds season totals + live Worlds rankings (refreshed on
+  // each page load). season_stats.py deliberately excludes Worlds events so
+  // these two sources don't double-count.
+  const w = (st.wins || 0) + (t.wins || 0);
+  const l = (st.losses || 0) + (t.losses || 0);
+  const ti = (st.ties || 0) + (t.ties || 0);
   const total = w + l + ti;
   const wlt = total > 0 ? `${w} / ${l} / ${ti}` : 'N/A';
   const win_rate = total > 0 ? `${((w / total) * 100).toFixed(1)}%` : 'N/A';
@@ -109,8 +115,8 @@ function rowForTeam(t) {
     region: esc(t.region || 'N/A'),
     rank: s.rank != null ? s.rank : 'N/A',
     score: s.score != null ? s.score : 'N/A',
-    true_skill: 'N/A',
-    ccwm: 'N/A',
+    true_skill: st.trueskill != null ? st.trueskill.toFixed(1) : 'N/A',
+    ccwm: st.ccwm != null ? st.ccwm.toFixed(1) : 'N/A',
     wlt,
     win_rate,
   };
@@ -217,6 +223,31 @@ async function showTeam(number) {
   document.title = team.number;
   const s = team.skills || {};
 
+  const st = team.stats || {};
+  const cw = (st.wins || 0) + (team.wins || 0);
+  const cl = (st.losses || 0) + (team.losses || 0);
+  const cti = (st.ties || 0) + (team.ties || 0);
+  const ctot = cw + cl + cti;
+  const seasonStatsRow = team.stats ? `
+      <table class="table table-hover">
+        <tr>
+          <th>True Skill</th>
+          <th>CCWM</th>
+          <th>OPR</th>
+          <th>DPR</th>
+          <th>W/L/T</th>
+          <th>Win Rate</th>
+        </tr>
+        <tr>
+          <td>${st.trueskill != null ? st.trueskill.toFixed(1) : 'N/A'}</td>
+          <td>${st.ccwm != null ? st.ccwm.toFixed(1) : 'N/A'}</td>
+          <td>${st.opr != null ? st.opr.toFixed(1) : 'N/A'}</td>
+          <td>${st.dpr != null ? st.dpr.toFixed(1) : 'N/A'}</td>
+          <td>${cw} / ${cl} / ${cti}</td>
+          <td>${ctot > 0 ? ((cw / ctot) * 100).toFixed(1) + '%' : 'N/A'}</td>
+        </tr>
+      </table>` : '';
+
   APP.innerHTML = `
     <div class="container-fluid pt-3">
       <h4 class="display-4">Matches</h4>
@@ -242,6 +273,7 @@ async function showTeam(number) {
           <td>${s.score != null ? s.score : 'N/A'}</td>
         </tr>
       </table>
+      ${seasonStatsRow}
       <br>
       <table class="table table-bordered" id="awards-table">
         <tbody><tr><td class="text-muted">Loading awards&hellip;</td></tr></tbody>
@@ -338,6 +370,40 @@ async function loadAwards(team, event) {
   }
 }
 
+// ---------- live rankings refresh ----------
+// Pulls current Worlds rankings from RobotEvents once at page load and updates
+// each team's W/L/T/rank in place. Re-renders the index when it finishes so
+// Win Rate reflects the latest match outcomes.
+
+async function refreshRankings() {
+  const tasks = [];
+  for (const ev of DATA.events) {
+    for (const d of (ev.divisions_meta || [])) {
+      tasks.push((async () => {
+        try {
+          const ranks = await reApiAll(`events/${ev.id}/divisions/${d.id}/rankings`);
+          for (const r of ranks) {
+            const entry = BY_NUMBER[r.team.name];
+            if (!entry) continue;
+            entry.team.rank = r.rank;
+            entry.team.wins = r.wins ?? 0;
+            entry.team.losses = r.losses ?? 0;
+            entry.team.ties = r.ties ?? 0;
+            entry.team.wp = r.wp ?? 0;
+            entry.team.ap = r.ap ?? 0;
+            entry.team.sp = r.sp ?? 0;
+          }
+        } catch (_) { /* transient failures are fine; next tick retries */ }
+      })());
+    }
+  }
+  await Promise.all(tasks);
+  // If the index is showing, re-render it so Win Rate / W-L-T update live.
+  if (!/^\/team\//.test(location.pathname)) {
+    showIndex();
+  }
+}
+
 // ---------- boot ----------
 
 async function boot() {
@@ -371,6 +437,9 @@ async function boot() {
 
   window.addEventListener('popstate', route);
   route();
+
+  // One-shot refresh at load so Win Rate and W/L/T reflect live Worlds results.
+  refreshRankings();
 }
 
 boot();

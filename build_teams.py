@@ -92,6 +92,14 @@ def load_manual_divisions():
         return json.load(f)
 
 
+def load_season_stats():
+    path = os.path.join("static", "season_stats.json")
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
 def build_event(ev):
     print(f"[{ev['key']}] fetching event {ev['id']}...")
     info = api(f"events/{ev['id']}")
@@ -176,6 +184,16 @@ def build_event(ev):
             matched += 1
     print(f"[{ev['key']}] skills matched: {matched}/{len(teams)}")
 
+    # Join season stats (TrueSkill, CCWM, OPR, DPR, season W/L/T, win rate)
+    season_stats = load_season_stats()
+    stats_matched = 0
+    for num, team in teams.items():
+        if num in season_stats:
+            team["stats"] = season_stats[num]
+            stats_matched += 1
+    if season_stats:
+        print(f"[{ev['key']}] season stats matched: {stats_matched}/{len(teams)}")
+
     return {
         "key": ev["key"],
         "id": ev["id"],
@@ -184,6 +202,7 @@ def build_event(ev):
         "name": info["name"],
         "start": info.get("start"),
         "divisions": [d["name"] for d in divisions],
+        "divisions_meta": [{"id": d["id"], "name": d["name"]} for d in divisions],
         "teams": list(teams.values()),
     }
 
