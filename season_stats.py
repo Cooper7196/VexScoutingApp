@@ -232,10 +232,8 @@ def compute_stats(matches):
     model = PlackettLuce()
     ratings = {}
 
-    ccwm_i, ccwm_j, ccwm_v, ccwm_b = [], [], [], []
     opr_i, opr_j, opr_v, opr_b, dpr_b = [], [], [], [], []
-    m_i = 0
-    a_i = 0
+    a_i = 0  # alliance row counter (two rows per match)
 
     for m in qual:
         rs, bs = m["rs"], m["bs"]
@@ -262,13 +260,9 @@ def compute_stats(matches):
         except Exception:
             pass
 
-        for t in red_teams:
-            ccwm_i.append(m_i); ccwm_j.append(idx(t)); ccwm_v.append(1)
-        for t in blue_teams:
-            ccwm_i.append(m_i); ccwm_j.append(idx(t)); ccwm_v.append(-1)
-        ccwm_b.append(rs - bs)
-        m_i += 1
-
+        # OPR / DPR: two alliance rows per match, A[row, team] = 1 for teams
+        # on that alliance. b = alliance score (OPR) or opponent score (DPR).
+        # CCWM is then OPR - DPR by definition.
         for t in red_teams:
             opr_i.append(a_i); opr_j.append(idx(t)); opr_v.append(1)
         opr_b.append(rs); dpr_b.append(bs); a_i += 1
@@ -277,12 +271,11 @@ def compute_stats(matches):
         opr_b.append(bs); dpr_b.append(rs); a_i += 1
 
     n = len(team_idx)
-    print(f"solving CCWM/OPR/DPR over {n} teams, {m_i} matches...")
-    M = coo_matrix((ccwm_v, (ccwm_i, ccwm_j)), shape=(m_i, n)).tocsr()
+    print(f"solving OPR/DPR over {n} teams, {a_i//2} matches...")
     A = coo_matrix((opr_v, (opr_i, opr_j)), shape=(a_i, n)).tocsr()
-    ccwm = lsmr(M, np.array(ccwm_b, dtype=np.float64))[0]
     opr = lsmr(A, np.array(opr_b, dtype=np.float64))[0]
     dpr = lsmr(A, np.array(dpr_b, dtype=np.float64))[0]
+    ccwm = opr - dpr
 
     out = {}
     for t, i in team_idx.items():
