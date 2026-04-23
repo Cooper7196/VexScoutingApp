@@ -73,26 +73,24 @@ function customSort(sortName, sortOrder, data) {
     }
     return aNum - bNum;
   };
+  const numericValue = (row) => {
+    const raw = row[sortName];
+    if (raw == null || raw === 'N/A') return NaN;
+    return parseFloat(String(raw).replace('%', ''));
+  };
   if (sortName === 'number') {
     data.sort((a, b) => cmpNum(a.number, b.number));
-  } else if (sortName === 'win_rate') {
-    data.sort((a, b) => parseFloat(String(a.win_rate).replace('%','')) - parseFloat(String(b.win_rate).replace('%','')));
-  } else {
-    data.sort((a, b) => {
-      let x = a[sortName], y = b[sortName];
-      if (x == 'N/A') x = Number.NEGATIVE_INFINITY;
-      if (y == 'N/A') y = Number.NEGATIVE_INFINITY;
-      x = parseFloat(x); y = parseFloat(y);
-      if (sortName === 'rank') {
-        if (isNaN(x)) return 1;
-        if (isNaN(y)) return -1;
-      }
-      if (isNaN(x)) return -1;
-      if (isNaN(y)) return 1;
-      return x - y;
-    });
+    if (sortOrder === 'desc') data.reverse();
+    return;
   }
-  if (sortOrder === 'desc') data.reverse();
+  // Numeric columns: N/A always at the bottom, regardless of sort direction.
+  const valid = [];
+  const invalid = [];
+  for (const row of data) (isNaN(numericValue(row)) ? invalid : valid).push(row);
+  valid.sort((a, b) => numericValue(a) - numericValue(b));
+  if (sortOrder === 'desc') valid.reverse();
+  data.length = 0;
+  data.push(...valid, ...invalid);
 }
 window.customSort = customSort;
 
