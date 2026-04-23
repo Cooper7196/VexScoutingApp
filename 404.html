@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Redirecting&hellip;</title>
+<script>
+// GH Pages SPA trick (rafgraph/spa-github-pages).
+// Rewrites /team/886Y/ -> /?/team/886Y/ and redirects to index.html.
+// pathSegmentsToKeep = 0 for user/custom-domain; set to 1 if deploying
+// to a project page at username.github.io/VexScoutingApp/.
+var pathSegmentsToKeep = 0;
+var l = window.location;
+l.replace(
+  l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+  l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
+  l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
+  (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+  l.hash
+);
+</script>
+</head>
+<body></body>
+</html>
