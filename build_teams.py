@@ -84,6 +84,14 @@ def load_skills_csv(path):
 WRAP_DIVISION_NAMES = {"High School", "Middle School", "VEX U", "Elementary School"}
 
 
+def load_manual_divisions():
+    path = "divisions.json"
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
 def build_event(ev):
     print(f"[{ev['key']}] fetching event {ev['id']}...")
     info = api(f"events/{ev['id']}")
@@ -134,15 +142,30 @@ def build_event(ev):
             print(f"  division {div['name']}: {e}")
         time.sleep(0.05)
 
-    # Round-robin fallback for teams without a live ranking yet (matches the
-    # original app's pre-event behavior). Sorted by team number for stability.
+    # Apply manual RECF division lists to any team still unassigned (i.e., the
+    # event hasn't started so rankings don't exist yet). Live rankings above
+    # always win. See divisions.json — derived from the PDFs at
+    # https://recf.org/vex_worlds/division-lists/
+    manual = load_manual_divisions().get(ev["key"], {})
+    manual_count = 0
+    for div_name, team_numbers in manual.items():
+        for num in team_numbers:
+            t = teams.get(num)
+            if t and t["division"] is None:
+                t["division"] = div_name
+                t["division_source"] = "recf-pdf"
+                manual_count += 1
+    if manual_count:
+        print(f"[{ev['key']}] RECF-PDF assigned {manual_count} teams")
+
+    # Last-resort round-robin for anything still unassigned.
     unassigned = sorted([t for t in teams.values() if t["division"] is None],
                         key=lambda t: t["number"])
     if unassigned and divisions:
         for i, team in enumerate(unassigned):
             team["division"] = divisions[i % len(divisions)]["name"]
             team["division_source"] = "round-robin"
-        print(f"[{ev['key']}] round-robin assigned {len(unassigned)} teams")
+        print(f"[{ev['key']}] round-robin fallback for {len(unassigned)} teams")
 
     # Join skills CSV
     skills = load_skills_csv(ev["skills_csv"])
