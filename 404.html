@@ -6,10 +6,10 @@
 <script>
 // GH Pages SPA trick (rafgraph/spa-github-pages).
 // Rewrites /team/886Y/ -> /?/team/886Y/ and redirects to index.html.
-// pathSegmentsToKeep = 0 for user/custom-domain; set to 1 if deploying
-// to a project page at username.github.io/VexScoutingApp/.
-var pathSegmentsToKeep = 0;
+// Auto-detect project pages (username.github.io/<repo>/) vs custom domain.
 var l = window.location;
+var pathSegmentsToKeep =
+  /\.github\.io$/.test(l.hostname) && l.pathname.split('/').length > 2 ? 1 : 0;
 l.replace(
   l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
   l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
