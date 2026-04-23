@@ -19,8 +19,11 @@ Seasons: V5RC = `197` (Push Back 2025-26), VURC = `198`.
 # 1. Regenerate the pre-built team data (run whenever you want fresh rankings)
 python build_teams.py
 
-# 2. Serve locally (any static server works)
-python -m http.server 8765
+# 2. Serve locally — use serve.py (not `python -m http.server`!) because the
+#    built-in server 404s on SPA routes like /team/XXX/. serve.py falls back
+#    to index.html for any missing file, matching what GitHub Pages does
+#    via 404.html.
+python serve.py 8765
 # open http://localhost:8765/
 ```
 
