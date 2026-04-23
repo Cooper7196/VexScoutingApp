@@ -13,17 +13,54 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
 ));
 
+// Small localStorage cache to keep a single visitor from re-hitting the same
+// RobotEvents endpoints across page navigations. TTL is short so rankings
+// still feel live. Token is shared across all visitors, so this also takes
+// load off the API key.
+const API_TTL_MS = 120_000;  // 2 min
+
+function cacheGet(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const { t, v } = JSON.parse(raw);
+    if (Date.now() - t > API_TTL_MS) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return v;
+  } catch { return null; }
+}
+function cacheSet(key, v) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ t: Date.now(), v }));
+  } catch {
+    // quota exceeded — wipe the API cache and retry once
+    for (const k of Object.keys(localStorage)) {
+      if (k.startsWith('api:')) localStorage.removeItem(k);
+    }
+    try { localStorage.setItem(key, JSON.stringify({ t: Date.now(), v })); } catch {}
+  }
+}
+
 async function reApi(path, params = {}) {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
     if (Array.isArray(v)) v.forEach(x => qs.append(k, x));
     else qs.append(k, v);
   }
-  const r = await fetch(API + path + (qs.toString() ? '?' + qs : ''), {
+  const url = API + path + (qs.toString() ? '?' + qs : '');
+  const key = 'api:' + url;
+  const hit = cacheGet(key);
+  if (hit) return hit;
+
+  const r = await fetch(url, {
     headers: { Authorization: 'Bearer ' + TOKEN, 'accept-language': 'en' },
   });
   if (!r.ok) throw new Error(`${r.status} ${path}`);
-  return r.json();
+  const json = await r.json();
+  cacheSet(key, json);
+  return json;
 }
 
 async function reApiAll(path, params = {}) {
