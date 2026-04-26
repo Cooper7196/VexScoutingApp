@@ -254,6 +254,7 @@
           <button id="btn-load">Load matches</button>
           <button id="btn-refresh" class="ghost">Refresh</button>
           <button id="btn-clear" class="ghost">Clear saved</button>
+          <button id="btn-export-anchors" class="ghost" title="Download a JSON of every per-broadcast anchor you've set, so they can be hardcoded">Export anchors</button>
         </div>
         <div id="status" class="status"></div>
       </div>
@@ -289,29 +290,9 @@
       hls.loadSource(url);
       hls.attachMedia(video);
       hls.on(Hls.Events.ERROR, (_, d) => console.error("HLS error:", d));
-      hls.on(Hls.Events.LEVEL_LOADED, (_, data) => {
-        const f = data.details?.fragments?.[0];
-        if (f?.programDateTime) {
-          // Wall-clock time at video.currentTime = 0
-          const realMs = f.programDateTime - (f.start || 0) * 1000;
-          autoAnchor(new Date(realMs).toISOString(), "pdt");
-        }
-      });
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = url;
     }
-  }
-
-  function autoAnchor(realTimeIso, source) {
-    if (!realTimeIso) return;
-    // Manual anchors win; don't clobber.
-    if (state.anchor && state.anchor.source === "manual") return;
-    // PDT > scheduled. Don't downgrade an already-PDT anchor.
-    if (state.anchor && state.anchor.source === "pdt" && source !== "pdt") return;
-    if (state.anchor && state.anchor.source === source && state.anchor.realTime === realTimeIso) return;
-    state.anchor = { matchId: null, videoTime: 0, realTime: realTimeIso, source };
-    save();
-    if (typeof renderMatches === "function") renderMatches();
   }
 
   function parseVexTv(url) {
@@ -388,12 +369,7 @@
       $s.className = "status";
       const url = await fetchPlaylistUrl(state.channelId, state.broadcastId);
       attachStream(url);
-      // Fallback anchor from scheduled start; HLS PDT will upgrade later if present.
-      let b = __broadcasts.find(x => x.id === state.broadcastId);
-      if (!b) {
-        try { b = await fetch(`https://api.boxcast.com/broadcasts/${state.broadcastId}`).then(r => r.ok ? r.json() : null); } catch {}
-      }
-      if (b?.starts_at) autoAnchor(b.starts_at, "starts_at");
+      applySavedAnchorForBroadcast();
       $s.textContent = "Stream loaded";
       $s.className = "status ok";
     } catch (e) {
@@ -411,9 +387,15 @@
     programId: null, // BoxCast parent channel id (per-program)
     eventId: null, divisionId: null,
     divisions: [], matches: [],
-    anchor: null,    // { matchId, videoTime, realTime }
+    anchor: null,    // { matchId, videoTime, realTime } — derived from anchors[broadcastId]
+    anchors: {},     // broadcastId -> anchor (per-stream)
     overrides: {},   // matchId -> videoTime (seconds)
     sidebarWidth: 400
+  };
+  // Hardcoded anchors keyed by BoxCast broadcast id. Filled in over time as
+  // streams are tuned and exported. User-saved anchors in localStorage win.
+  const BAKED_ANCHORS = {
+    // "sw2mewknkrowugketxyt": { matchId: null, videoTime: 245.6, realTime: "2026-04-25T18:50:00Z" },
   };
   let state;
   try {
@@ -467,6 +449,7 @@
     state.broadcastId = b.id;
     state.channelId = b.channel_id;
     save();
+    applySavedAnchorForBroadcast();
     await loadStream();
     if (syncDivisionToBroadcast() && state.eventId) {
       try { await loadMatches(); } catch (e) { setStatus(e.message, "error"); }
@@ -554,6 +537,20 @@
       await loadMatches();
     } catch (e) { setStatus(e.message, "error"); }
   });
+  document.getElementById("btn-export-anchors").addEventListener("click", async () => {
+    const merged = { ...BAKED_ANCHORS, ...(state.anchors || {}) };
+    const text = JSON.stringify(merged, null, 2);
+    // Annotate each anchor with the broadcast name when known
+    let labelled = "// Per-broadcast anchors (merge into BAKED_ANCHORS in index.html)\n" + text;
+    try { await navigator.clipboard.writeText(text); } catch {}
+    const blob = new Blob([labelled], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "anchors.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
   document.getElementById("btn-clear").addEventListener("click", () => {
     if (!confirm("Clear all saved data (token, anchor, overrides, matches)?")) return;
     localStorage.removeItem(LS_KEY);
@@ -650,24 +647,29 @@
     const m = state.matches.find(x => x.id === matchId);
     const real = realTimeOf(m);
     if (!real) { alert("Match has no started/scheduled time."); return; }
-    state.anchor = { matchId, videoTime: video.currentTime, realTime: real, source: "manual" };
+    state.anchor = { matchId, videoTime: video.currentTime, realTime: real };
+    state.anchors = state.anchors || {};
+    if (state.broadcastId) state.anchors[state.broadcastId] = state.anchor;
     save();
     renderMatches();
+  }
+  function applySavedAnchorForBroadcast() {
+    const id = state.broadcastId;
+    if (!id) return;
+    const saved = state.anchors?.[id] || BAKED_ANCHORS[id] || null;
+    if (JSON.stringify(state.anchor) === JSON.stringify(saved)) return;
+    state.anchor = saved;
+    save();
+    if (typeof renderMatches === "function") renderMatches();
   }
   function setOverride(matchId, t) { state.overrides[matchId] = t; save(); renderMatches(); }
   function clearOverride(matchId) { delete state.overrides[matchId]; save(); renderMatches(); }
 
   function updateAnchorInfo() {
     if (!state.anchor) { $anchorInfo.textContent = "no anchor set"; return; }
+    const m = state.matches.find(x => x.id === state.anchor.matchId);
     const day = new Date(state.anchor.realTime).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-    let label;
-    if (state.anchor.source === "pdt") label = "auto (stream)";
-    else if (state.anchor.source === "starts_at") label = "auto (scheduled)";
-    else {
-      const m = state.matches.find(x => x.id === state.anchor.matchId);
-      label = m?.name || "manual";
-    }
-    $anchorInfo.textContent = `⚓ ${label} · ${day}`;
+    $anchorInfo.textContent = `⚓ ${m?.name || "match " + state.anchor.matchId} · ${day}`;
   }
 
   // ---------- Rendering ----------
