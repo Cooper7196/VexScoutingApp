@@ -43,8 +43,8 @@
   @media (max-width: 768px) {
     html, body { overflow: auto; height: auto; min-height: 100vh; }
     #app {
-      grid-template-columns: 1fr;
-      grid-template-rows: auto 0 1fr;
+      display: flex;
+      flex-direction: column;
       height: auto;
       min-height: 100vh;
     }
@@ -53,15 +53,18 @@
       top: 0;
       z-index: 10;
       padding: 0;
+      width: 100%;
       aspect-ratio: 16 / 9;
-      max-height: 60vh;
+      max-height: 50vh;
+      flex: 0 0 auto;
     }
-    video { max-height: 60vh; }
+    video { width: 100%; height: 100%; max-height: none; }
     #resizer { display: none; }
     #sidebar {
       border-left: none;
       border-top: 1px solid var(--border);
       overflow-y: visible;
+      flex: 1 0 auto;
     }
     button.small { padding: 6px 10px; font-size: 12px; }
     .match { padding: 12px 14px; }
