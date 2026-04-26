@@ -455,6 +455,7 @@
     state.channelId = b.channel_id;
     save();
     applySavedAnchorForBroadcast();
+    renderMatches();
     await loadStream();
     if (syncDivisionToBroadcast() && state.eventId) {
       try { await loadMatches(); } catch (e) { setStatus(e.message, "error"); }
@@ -517,6 +518,7 @@
       save();
       __broadcasts = await fetchBroadcastsForProgram(vurc.id);
       renderBroadcastOptions();
+      renderMatches();
       if (syncDivisionToBroadcast() && state.eventId) {
         try { await loadMatches(); } catch (e) { setStatus(e.message, "error"); }
       }
@@ -718,15 +720,19 @@
     }
     const filter = $filter.value.trim().toLowerCase();
     const teamFilters = $teamFilter.value.split(/[\s,]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
-    const anchorDay = state.anchor?.realTime ? localDayKey(state.anchor.realTime) : null;
+    const broadcastDay = (() => {
+      const b = __broadcasts.find(x => x.id === state.broadcastId);
+      if (b?.starts_at) return localDayKey(b.starts_at);
+      return state.anchor?.realTime ? localDayKey(state.anchor.realTime) : null;
+    })();
     const sorted = [...state.matches].sort((a, b) => {
       const ta = realTimeOf(a) ? new Date(realTimeOf(a)).getTime() : 0;
       const tb = realTimeOf(b) ? new Date(realTimeOf(b)).getTime() : 0;
       return ta - tb;
     }).filter(m => {
-      if (anchorDay) {
+      if (broadcastDay) {
         const mr = realTimeOf(m);
-        if (!mr || localDayKey(mr) !== anchorDay) return false;
+        if (!mr || localDayKey(mr) !== broadcastDay) return false;
       }
       if (filter && !matchSearchText(m).includes(filter)) return false;
       if (teamFilters.length) {
