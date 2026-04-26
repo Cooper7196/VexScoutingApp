@@ -225,9 +225,14 @@
     <details id="settings" open>
       <summary>Settings</summary>
       <div class="settings-body">
-        <label>VEX TV broadcast URL
-          <input id="opt-vextv" type="text" placeholder="paste vexworlds.tv/#/viewer/broadcasts/... URL" />
+        <label>Broadcast
+          <select id="opt-broadcast"></select>
         </label>
+        <select id="opt-program" hidden></select>
+        <details>
+          <summary style="background:transparent;padding:4px 0;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;cursor:pointer">Or paste a vexworlds.tv URL</summary>
+          <input id="opt-vextv" type="text" placeholder="vexworlds.tv/#/viewer/broadcasts/... URL" style="margin-top:6px;width:100%" />
+        </details>
         <div class="row">
           <button id="btn-reload-stream" class="ghost">Reload stream</button>
           <span id="stream-status" class="status" style="padding:0;flex:1"></span>
@@ -239,7 +244,7 @@
         <label>Event SKU
           <input id="opt-sku" type="text" placeholder="e.g. RE-VRC-25-1234" />
         </label>
-        <label>Division
+        <label id="opt-division-label">Division
           <select id="opt-division"></select>
         </label>
         <div class="row">
@@ -266,8 +271,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
 <script>
   // ---------- Player ----------
+  const BOXCAST_ACCOUNT = "jm81brqcwqhlenmnd1ub";
   const DEFAULT_CHANNEL = "practice--qualification-matches-research-ohtdauwol2bb9h8g6owt";
   const DEFAULT_BROADCAST = "sw2mewknkrowugketxyt";
+  let __programs = [];   // [{id, name}]
+  let __broadcasts = []; // for current program: [{id, name, channel_id, starts_at, ...}]
   const video = document.getElementById("video");
   let hls = null;
 
@@ -294,8 +302,60 @@
     const r = await fetch(u);
     if (!r.ok) throw new Error(`BoxCast view ${r.status}`);
     const j = await r.json();
-    if (!j.playlist) throw new Error("No playlist in response");
+    if (!j.playlist) {
+      const status = j.status || "no playlist";
+      throw new Error(`Broadcast not playable (${status}${j.reason ? ": " + j.reason : ""})`);
+    }
     return j.playlist;
+  }
+
+  async function fetchPrograms() {
+    const r = await fetch(`https://api.boxcast.com/accounts/${BOXCAST_ACCOUNT}/channels`);
+    if (!r.ok) throw new Error(`channels ${r.status}`);
+    const all = await r.json();
+    // The "All" mega-channel mixes everything; per-program channels are more useful here.
+    return all.filter(c => c.name !== "All");
+  }
+  async function fetchBroadcastsForProgram(programId) {
+    const q = "timeframe:future timeframe:preroll timeframe:current timeframe:past";
+    const r = await fetch(`https://api.boxcast.com/channels/${programId}/broadcasts?q=${encodeURIComponent(q)}&s=-starts_at&p=0&l=1000`);
+    if (!r.ok) throw new Error(`broadcasts ${r.status}`);
+    const all = await r.json();
+    // Channels mix multi-year archives; keep only the current event window.
+    const now = Date.now();
+    const WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+    return all.filter(b => Math.abs(new Date(b.starts_at) - now) <= WINDOW_MS);
+  }
+  function divisionNameFromBroadcast(name) {
+    const m = name && name.match(/\(([^)]+)\)/);
+    return m ? m[1].trim() : null;
+  }
+  function syncDivisionToBroadcast() {
+    const b = __broadcasts.find(x => x.id === state.broadcastId);
+    if (!b || !state.divisions?.length) { updateDivisionVisibility(false); return false; }
+    const wanted = divisionNameFromBroadcast(b.name);
+    if (!wanted) { updateDivisionVisibility(false); return false; }
+    const div = state.divisions.find(d => d.name.toLowerCase() === wanted.toLowerCase());
+    if (!div) { updateDivisionVisibility(false); return false; }
+    updateDivisionVisibility(true);
+    if (div.id === state.divisionId) return false;
+    state.divisionId = div.id;
+    $division.value = div.id;
+    save();
+    return true;
+  }
+  function updateDivisionVisibility(autoSelected) {
+    const lbl = document.getElementById("opt-division-label");
+    if (lbl) lbl.hidden = !!autoSelected;
+  }
+
+  function broadcastDayLabel(b) {
+    const d = new Date(b.starts_at);
+    return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  }
+  function broadcastTimeLabel(b) {
+    const d = new Date(b.starts_at);
+    return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   }
 
   async function loadStream() {
@@ -319,6 +379,7 @@
   const defaultState = {
     token: DEFAULT_TOKEN, sku: "RE-VURC-26-4027",
     channelId: DEFAULT_CHANNEL, broadcastId: DEFAULT_BROADCAST,
+    programId: null, // BoxCast parent channel id (per-program)
     eventId: null, divisionId: null,
     divisions: [], matches: [],
     anchor: null,    // { matchId, videoTime, realTime }
@@ -347,9 +408,7 @@
   $sku.addEventListener("input", () => { state.sku = $sku.value; save(); });
 
   const $vextv = document.getElementById("opt-vextv");
-  $vextv.value = state.broadcastId
-    ? `https://www.vexworlds.tv/#/viewer/broadcasts/${state.channelId}/${state.broadcastId}`
-    : "";
+  $vextv.value = "";
   $vextv.addEventListener("change", async () => {
     const parsed = parseVexTv($vextv.value);
     if (!parsed) {
@@ -363,6 +422,92 @@
     await loadStream();
   });
   document.getElementById("btn-reload-stream").addEventListener("click", loadStream);
+
+  const $program = document.getElementById("opt-program");
+  const $broadcast = document.getElementById("opt-broadcast");
+  const $streamStatus = document.getElementById("stream-status");
+
+  $program.addEventListener("change", async () => {
+    state.programId = $program.value;
+    save();
+    await loadBroadcastsForCurrentProgram(true);
+  });
+  $broadcast.addEventListener("change", async () => {
+    const b = __broadcasts.find(x => x.id === $broadcast.value);
+    if (!b) return;
+    state.broadcastId = b.id;
+    state.channelId = b.channel_id;
+    save();
+    await loadStream();
+    if (syncDivisionToBroadcast() && state.eventId) {
+      try { await loadMatches(); } catch (e) { setStatus(e.message, "error"); }
+    }
+  });
+
+  function renderBroadcastOptions() {
+    if (!__broadcasts.length) { $broadcast.innerHTML = '<option value="">(none)</option>'; return; }
+    // Descending by start time so the most recent day is at the top
+    // (channels mix multi-year archives with the current event).
+    const sorted = [...__broadcasts].sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at));
+    const now = Date.now();
+    const byDay = {};
+    sorted.forEach(b => { (byDay[broadcastDayLabel(b)] ||= []).push(b); });
+    $broadcast.innerHTML = Object.entries(byDay).map(([day, list]) =>
+      `<optgroup label="${day}">` +
+      list.map(b => {
+        const upcoming = new Date(b.starts_at).getTime() > now;
+        const suffix = upcoming ? " (upcoming)" : "";
+        return `<option value="${b.id}"${upcoming ? " disabled" : ""}>${broadcastTimeLabel(b)} — ${b.name}${suffix}</option>`;
+      }).join("") +
+      "</optgroup>"
+    ).join("");
+    if (state.broadcastId && __broadcasts.find(b => b.id === state.broadcastId)) {
+      $broadcast.value = state.broadcastId;
+    }
+  }
+
+  async function loadBroadcastsForCurrentProgram(autoSelectFirst) {
+    if (!state.programId) return;
+    $streamStatus.textContent = "Loading broadcasts…";
+    $streamStatus.className = "status";
+    try {
+      __broadcasts = await fetchBroadcastsForProgram(state.programId);
+      renderBroadcastOptions();
+      if (autoSelectFirst && __broadcasts.length) {
+        // Pick most recent broadcast by default
+        const sorted = [...__broadcasts].sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at));
+        const b = sorted[0];
+        state.broadcastId = b.id;
+        state.channelId = b.channel_id;
+        $broadcast.value = b.id;
+        save();
+        await loadStream();
+      } else {
+        $streamStatus.textContent = "";
+      }
+    } catch (e) {
+      $streamStatus.textContent = `Error: ${e.message}`;
+      $streamStatus.className = "status error";
+    }
+  }
+
+  async function initBoxcastDiscovery() {
+    try {
+      __programs = await fetchPrograms();
+      const vurc = __programs.find(p => p.name === "VURC");
+      if (!vurc) throw new Error("VURC channel not found");
+      state.programId = vurc.id;
+      save();
+      __broadcasts = await fetchBroadcastsForProgram(vurc.id);
+      renderBroadcastOptions();
+      if (syncDivisionToBroadcast() && state.eventId) {
+        try { await loadMatches(); } catch (e) { setStatus(e.message, "error"); }
+      }
+    } catch (e) {
+      $streamStatus.textContent = `Discovery error: ${e.message}`;
+      $streamStatus.className = "status error";
+    }
+  }
   $division.addEventListener("change", async () => {
     state.divisionId = parseInt($division.value, 10);
     save();
@@ -444,6 +589,8 @@
     if (!state.divisions.length) { $division.innerHTML = ""; return; }
     $division.innerHTML = state.divisions
       .map(d => `<option value="${d.id}">${d.name}</option>`).join("");
+    // Prefer the division implied by the currently selected broadcast.
+    if (syncDivisionToBroadcast()) return;
     if (state.divisionId && state.divisions.find(d => d.id === state.divisionId)) {
       $division.value = state.divisionId;
     } else {
@@ -663,7 +810,8 @@
   populateTeamList();
   renderMatches();
   loadStream();
-  if (state.token && state.sku) document.getElementById("settings").open = false;
+  initBoxcastDiscovery();
+  document.getElementById("settings").open = !state.matches?.length;
 </script>
 </body>
 </html>
