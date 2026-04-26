@@ -110,6 +110,8 @@
     color: var(--text);
   }
   button.small { padding: 3px 7px; font-size: 11px; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .match-seek button { font-family: ui-monospace, "SF Mono", Consolas, monospace; }
   .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   #header {
     padding: 8px 14px;
@@ -531,10 +533,11 @@
           <div class="match-teams">${teamsHtml(m)}</div>
           <div class="match-meta">
             <span>${m.field || ""}</span>
-            <span>${vt != null ? fmtTime(vt) : "—"}</span>
+            <span class="match-seek">
+              <button class="small" data-act="seek" ${vt == null ? "disabled" : ""}>▶ ${vt != null ? fmtTime(vt) : "—"}</button>
+            </span>
           </div>
           <div class="match-actions">
-            <button class="small" data-act="seek">▶ Seek</button>
             <button class="small ghost" data-act="anchor">⚓ Set as anchor</button>
             <button class="small ghost" data-act="set-current">Pin to current</button>
             <button class="small ghost" data-act="adj" data-d="-5">−5s</button>
