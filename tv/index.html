@@ -89,7 +89,10 @@
     overflow-y: auto;
     display: flex;
     flex-direction: column;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
+  #sidebar::-webkit-scrollbar { display: none; }
   details { border-bottom: 1px solid var(--border); }
   summary {
     padding: 10px 14px;
