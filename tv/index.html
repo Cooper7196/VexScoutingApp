@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>VEX Worlds Stream</title>
 <style>
   :root {
@@ -28,7 +29,7 @@
   }
   #app {
     display: grid;
-    grid-template-columns: 1fr 6px 400px;
+    grid-template-columns: 1fr 6px var(--sidebar-w, 400px);
     height: 100vh;
   }
   #resizer {
@@ -39,6 +40,33 @@
   #resizer:hover, #resizer.dragging { background: var(--accent); }
   body.resizing { cursor: col-resize; user-select: none; }
   body.resizing iframe, body.resizing video { pointer-events: none; }
+  @media (max-width: 768px) {
+    html, body { overflow: auto; height: auto; min-height: 100vh; }
+    #app {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto 0 1fr;
+      height: auto;
+      min-height: 100vh;
+    }
+    #player-pane {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      padding: 0;
+      aspect-ratio: 16 / 9;
+      max-height: 60vh;
+    }
+    video { max-height: 60vh; }
+    #resizer { display: none; }
+    #sidebar {
+      border-left: none;
+      border-top: 1px solid var(--border);
+      overflow-y: visible;
+    }
+    button.small { padding: 6px 10px; font-size: 12px; }
+    .match { padding: 12px 14px; }
+    .match-actions button { padding: 8px 12px; font-size: 12px; }
+  }
   #player-pane {
     display: flex;
     align-items: center;
@@ -587,7 +615,7 @@
   const $app = document.getElementById("app");
   const $resizer = document.getElementById("resizer");
   function applySidebarWidth(px) {
-    $app.style.gridTemplateColumns = `1fr 6px ${px}px`;
+    document.documentElement.style.setProperty("--sidebar-w", px + "px");
   }
   applySidebarWidth(state.sidebarWidth || 400);
   $resizer.addEventListener("pointerdown", (e) => {
