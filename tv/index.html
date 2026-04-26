@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>VEX Worlds Stream</title>
+<style>
+  :root {
+    --bg: #111;
+    --panel: #1a1a1a;
+    --panel2: #222;
+    --border: #2a2a2a;
+    --text: #eee;
+    --muted: #888;
+    --accent: #4a9eff;
+    --good: #2a5;
+    --bad: #c44;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+    font-size: 14px;
+    overflow: hidden;
+  }
+  #app {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    height: 100vh;
+  }
+  #player-pane {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    background: #000;
+    min-width: 0;
+  }
+  video {
+    width: 100%;
+    max-height: 100%;
+    background: #000;
+  }
+  #sidebar {
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  details { border-bottom: 1px solid var(--border); }
+  summary {
+    padding: 10px 14px;
+    cursor: pointer;
+    user-select: none;
+    background: var(--panel2);
+    font-weight: 500;
+  }
+  .settings-body {
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  input, select {
+    background: #0d0d0d;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 13px;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+  }
+  button:hover { filter: brightness(1.1); }
+  button.ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  button.small { padding: 3px 7px; font-size: 11px; }
+  .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  #header {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: var(--panel2);
+  }
+  #header .title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 500;
+  }
+  #anchor-info {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  #match-filter {
+    width: 100%;
+  }
+  #matches { flex: 1; }
+  .match {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .match:hover { background: #1f1f1f; }
+  .match.anchor { background: #1d2a1d; }
+  .match.has-override::before {
+    content: "● ";
+    color: var(--accent);
+  }
+  .match-name { font-weight: 500; }
+  .match-teams {
+    font-size: 11px;
+    margin-top: 2px;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  }
+  .red { color: #f77; }
+  .blue { color: #7af; }
+  .match-meta {
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    margin-top: 2px;
+  }
+  .match-actions {
+    margin-top: 8px;
+    display: none;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .match.expanded .match-actions { display: flex; }
+  .status {
+    padding: 6px 14px;
+    color: var(--muted);
+    font-size: 12px;
+    min-height: 24px;
+  }
+  .status.error { color: var(--bad); }
+  .status.ok { color: var(--good); }
+  .empty {
+    padding: 24px 14px;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="player-pane">
+    <video id="video" controls autoplay playsinline></video>
+  </div>
+  <div id="sidebar">
+    <details id="settings" open>
+      <summary>Settings</summary>
+      <div class="settings-body">
+        <label>VEX TV broadcast URL
+          <input id="opt-vextv" type="text" placeholder="paste vexworlds.tv/#/viewer/broadcasts/... URL" />
+        </label>
+        <div class="row">
+          <button id="btn-reload-stream" class="ghost">Reload stream</button>
+          <span id="stream-status" class="status" style="padding:0;flex:1"></span>
+        </div>
+        <hr style="border:none;border-top:1px solid var(--border);margin:4px 0" />
+        <label>RobotEvents API Token
+          <input id="opt-token" type="password" placeholder="Bearer token from robotevents.com/api/v2" />
+        </label>
+        <label>Event SKU
+          <input id="opt-sku" type="text" placeholder="e.g. RE-VRC-25-1234" />
+        </label>
+        <label>Division
+          <select id="opt-division"></select>
+        </label>
+        <div class="row">
+          <button id="btn-load">Load matches</button>
+          <button id="btn-refresh" class="ghost">Refresh</button>
+          <button id="btn-clear" class="ghost">Clear saved</button>
+        </div>
+        <div id="status" class="status"></div>
+      </div>
+    </details>
+    <div id="header">
+      <div class="title">
+        <span>Matches</span>
+        <span id="anchor-info">no anchor set</span>
+      </div>
+      <input id="match-filter" type="text" placeholder="Filter (match name, field)" />
+      <input id="team-filter" type="text" placeholder="Teams (e.g. 1234A, 5678B) — any match" list="team-list" />
+      <datalist id="team-list"></datalist>
+    </div>
+    <div id="matches"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+<script>
+  // ---------- Player ----------
+  const DEFAULT_CHANNEL = "practice--qualification-matches-research-ohtdauwol2bb9h8g6owt";
+  const DEFAULT_BROADCAST = "sw2mewknkrowugketxyt";
+  const video = document.getElementById("video");
+  let hls = null;
+
+  function attachStream(url) {
+    if (window.Hls && Hls.isSupported()) {
+      if (hls) { try { hls.destroy(); } catch {} }
+      hls = new Hls();
+      hls.loadSource(url);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.ERROR, (_, d) => console.error("HLS error:", d));
+    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      video.src = url;
+    }
+  }
+
+  function parseVexTv(url) {
+    // matches: https://www.vexworlds.tv/#/viewer/broadcasts/{channel}/{broadcast}
+    const m = url && url.match(/\/viewer\/broadcasts\/([^\/?#]+)\/([^\/?#]+)/);
+    return m ? { channel: m[1], broadcast: m[2] } : null;
+  }
+
+  async function fetchPlaylistUrl(channel, broadcast) {
+    const u = `https://rest.boxcast.com/broadcasts/${broadcast}/view?channel_id=${encodeURIComponent(channel)}&host=www.vexworlds.tv&extended=true&byteranges=true`;
+    const r = await fetch(u);
+    if (!r.ok) throw new Error(`BoxCast view ${r.status}`);
+    const j = await r.json();
+    if (!j.playlist) throw new Error("No playlist in response");
+    return j.playlist;
+  }
+
+  async function loadStream() {
+    const $s = document.getElementById("stream-status");
+    try {
+      $s.textContent = "Fetching stream URL…";
+      $s.className = "status";
+      const url = await fetchPlaylistUrl(state.channelId, state.broadcastId);
+      attachStream(url);
+      $s.textContent = "Stream loaded";
+      $s.className = "status ok";
+    } catch (e) {
+      $s.textContent = `Stream error: ${e.message}`;
+      $s.className = "status error";
+    }
+  }
+
+  // ---------- Persisted state ----------
+  const LS_KEY = "vexPlayer.v1";
+  const DEFAULT_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIzIiwianRpIjoiYzY4ODQxZjA0ZGEzZTY3ZWYzODEzZjQ5MDgzNjQwMGJjMTM5ZDVjMWM1OGU4YmI4MjNmMTU0Y2ZlYTNjNDEwMjA3YmJmOWE4MGQ2OGM5YjkiLCJpYXQiOjE3NzcxNjQ0NzUuOTc5NTM4LCJuYmYiOjE3NzcxNjQ0NzUuOTc5NTQwMSwiZXhwIjoyNzIzOTM1Njc1Ljk3NDcyMzgsInN1YiI6Ijg0NTE5Iiwic2NvcGVzIjpbXX0.Yod_lgaSOajs2ANvl6KWvhu83BZmMjgwKquoHJ25IWgAsw6oEPgZMdsel8hbcXQPtpqxFcz5NLUBw7G2nd2zL7xf1mcFMy5JjGuYmwVaWzgmI5vd5tvPmS_f0fz5FaW1-GR_u18Q855Qfr5GNqw_Knq4boumnq7OpAr3OP-7xOgWhi52rf61yw2HnkY6uq9GvpsylgKXSQfNA2ADRSkf6LdG1cw69G6amr1pYzlV_ZlNmub6k0FzJqVWolgCGjFXZn4XcTd_MF9UdarTKBNSRebscpO9Esq4UFMWHohHTMcunmw_pOZRlpGEUB5EFY3WK56OVY3hmvtmlfgWvNXP0ieK7Srue8j92ZPRRlvm3__fPirioCB5uX3yO6KfWzmHdqdkOwgXpbLhgv5C-C7Mxy2XJo6xjt8iC9cpRZkldVaiJ4sWIEd_XiomS21t4bkTlc5b_S2XYItLxBmKRuiUR2RRggTiRhZJ7fwoItPMLbUKBV01atb72B3YPA0-3at-23N0o4_sWotfhND-QTGOVk_dSEc4Hk9MzF_bn89sLBKT4JicNjF_ceL5SXlzHnYHEvKRcgJCFMU8LoWhNy2Me4i2nPC-vkPvzIyhwBvp-VBgrB8Nigo4Kzl52wPe3R_O_VVi1jh7PQ4WIqKR_FlfMlq531LtSM75bEhW0MJyaEw";
+  const defaultState = {
+    token: DEFAULT_TOKEN, sku: "",
+    channelId: DEFAULT_CHANNEL, broadcastId: DEFAULT_BROADCAST,
+    eventId: null, divisionId: null,
+    divisions: [], matches: [],
+    anchor: null,    // { matchId, videoTime, realTime }
+    overrides: {}    // matchId -> videoTime (seconds)
+  };
+  let state;
+  try {
+    state = Object.assign({}, defaultState, JSON.parse(localStorage.getItem(LS_KEY) || "{}"));
+  } catch { state = { ...defaultState }; }
+  if (!state.token) state.token = DEFAULT_TOKEN;
+  function save() { localStorage.setItem(LS_KEY, JSON.stringify(state)); }
+
+  // ---------- DOM ----------
+  const $token = document.getElementById("opt-token");
+  const $sku = document.getElementById("opt-sku");
+  const $division = document.getElementById("opt-division");
+  const $status = document.getElementById("status");
+  const $matches = document.getElementById("matches");
+  const $anchorInfo = document.getElementById("anchor-info");
+  const $filter = document.getElementById("match-filter");
+
+  $token.value = state.token;
+  $sku.value = state.sku;
+  $token.addEventListener("input", () => { state.token = $token.value; save(); });
+  $sku.addEventListener("input", () => { state.sku = $sku.value; save(); });
+
+  const $vextv = document.getElementById("opt-vextv");
+  $vextv.value = state.broadcastId
+    ? `https://www.vexworlds.tv/#/viewer/broadcasts/${state.channelId}/${state.broadcastId}`
+    : "";
+  $vextv.addEventListener("change", async () => {
+    const parsed = parseVexTv($vextv.value);
+    if (!parsed) {
+      document.getElementById("stream-status").textContent = "Could not parse URL";
+      document.getElementById("stream-status").className = "status error";
+      return;
+    }
+    state.channelId = parsed.channel;
+    state.broadcastId = parsed.broadcast;
+    save();
+    await loadStream();
+  });
+  document.getElementById("btn-reload-stream").addEventListener("click", loadStream);
+  $division.addEventListener("change", async () => {
+    state.divisionId = parseInt($division.value, 10);
+    save();
+    try { await loadMatches(); } catch (e) { setStatus(e.message, "error"); }
+  });
+  $filter.addEventListener("input", renderMatches);
+  const $teamFilter = document.getElementById("team-filter");
+  const $teamList = document.getElementById("team-list");
+  $teamFilter.addEventListener("input", renderMatches);
+
+  document.getElementById("btn-load").addEventListener("click", fullLoad);
+  document.getElementById("btn-refresh").addEventListener("click", async () => {
+    try {
+      if (!state.eventId) { await fullLoad(); return; }
+      await loadMatches();
+    } catch (e) { setStatus(e.message, "error"); }
+  });
+  document.getElementById("btn-clear").addEventListener("click", () => {
+    if (!confirm("Clear all saved data (token, anchor, overrides, matches)?")) return;
+    localStorage.removeItem(LS_KEY);
+    location.reload();
+  });
+
+  async function fullLoad() {
+    try {
+      await loadEvent();
+      await loadDivisions();
+      if (state.divisionId) await loadMatches();
+    } catch (e) { setStatus(e.message, "error"); }
+  }
+
+  function setStatus(msg, kind) {
+    $status.textContent = msg || "";
+    $status.className = "status" + (kind ? " " + kind : "");
+  }
+
+  // ---------- RobotEvents API ----------
+  async function api(path) {
+    if (!state.token) throw new Error("API token required");
+    const r = await fetch(`https://www.robotevents.com/api/v2${path}`, {
+      headers: { Authorization: `Bearer ${state.token}`, Accept: "application/json" }
+    });
+    if (!r.ok) throw new Error(`API ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    return r.json();
+  }
+
+  async function loadEvent() {
+    if (!state.sku) throw new Error("Event SKU required");
+    setStatus("Loading event…");
+    const r = await api(`/events?sku%5B%5D=${encodeURIComponent(state.sku)}`);
+    if (!r.data?.length) throw new Error("Event not found for SKU");
+    state.eventId = r.data[0].id;
+    save();
+  }
+  async function loadDivisions() {
+    setStatus("Loading divisions…");
+    const r = await api(`/events/${state.eventId}`);
+    state.divisions = r.divisions || [];
+    save();
+    populateDivisions();
+  }
+  async function loadMatches() {
+    setStatus("Loading matches…");
+    let all = [], page = 1;
+    while (true) {
+      const r = await api(`/events/${state.eventId}/divisions/${state.divisionId}/matches?per_page=250&page=${page}`);
+      all = all.concat(r.data || []);
+      if (!r.meta || page >= (r.meta.last_page || 1)) break;
+      page++;
+    }
+    state.matches = all;
+    save();
+    setStatus(`Loaded ${all.length} matches`, "ok");
+    populateTeamList();
+    renderMatches();
+  }
+
+  function populateDivisions() {
+    if (!state.divisions.length) { $division.innerHTML = ""; return; }
+    $division.innerHTML = state.divisions
+      .map(d => `<option value="${d.id}">${d.name}</option>`).join("");
+    if (state.divisionId && state.divisions.find(d => d.id === state.divisionId)) {
+      $division.value = state.divisionId;
+    } else {
+      state.divisionId = state.divisions[0].id;
+      $division.value = state.divisionId;
+      save();
+    }
+  }
+
+  // ---------- Time mapping ----------
+  function realTimeOf(m) { return m.started || m.scheduled; }
+  function localDayKey(iso) {
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  }
+
+  function videoTimeFor(matchId) {
+    if (state.overrides[matchId] != null) return state.overrides[matchId];
+    if (!state.anchor) return null;
+    const m = state.matches.find(x => x.id === matchId);
+    const mReal = m && realTimeOf(m);
+    if (!mReal || !state.anchor.realTime) return null;
+    const diff = (new Date(mReal) - new Date(state.anchor.realTime)) / 1000;
+    return state.anchor.videoTime + diff;
+  }
+
+  function setAnchor(matchId) {
+    const m = state.matches.find(x => x.id === matchId);
+    const real = realTimeOf(m);
+    if (!real) { alert("Match has no started/scheduled time."); return; }
+    state.anchor = { matchId, videoTime: video.currentTime, realTime: real };
+    save();
+    renderMatches();
+  }
+  function setOverride(matchId, t) { state.overrides[matchId] = t; save(); renderMatches(); }
+  function clearOverride(matchId) { delete state.overrides[matchId]; save(); renderMatches(); }
+
+  function updateAnchorInfo() {
+    if (!state.anchor) { $anchorInfo.textContent = "no anchor set"; return; }
+    const m = state.matches.find(x => x.id === state.anchor.matchId);
+    const day = new Date(state.anchor.realTime).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    $anchorInfo.textContent = `⚓ ${m?.name || "match " + state.anchor.matchId} · ${day}`;
+  }
+
+  // ---------- Rendering ----------
+  function fmtTime(s) {
+    if (s == null || isNaN(s)) return "—";
+    const sign = s < 0 ? "-" : "";
+    s = Math.abs(s);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = Math.floor(s % 60);
+    return sign + (h ? `${h}:${String(m).padStart(2,"0")}:` : `${m}:`) + String(sec).padStart(2,"0");
+  }
+
+  function teamsHtml(m) {
+    if (!m.alliances) return "";
+    const names = a => a?.teams?.map(t => t.team?.name || "").filter(Boolean).join(" ") || "";
+    const red = m.alliances.find(a => a.color === "red");
+    const blue = m.alliances.find(a => a.color === "blue");
+    return `<span class="red">${names(red)}</span> <span style="color:var(--muted)">vs</span> <span class="blue">${names(blue)}</span>`;
+  }
+
+  function matchSearchText(m) {
+    return [m.name, m.field].filter(Boolean).join(" ").toLowerCase();
+  }
+  function teamsOf(m) {
+    return (m.alliances || []).flatMap(a => (a.teams || []).map(t => t.team?.name || "")).filter(Boolean);
+  }
+
+  function populateTeamList() {
+    const teams = new Set();
+    state.matches.forEach(m => teamsOf(m).forEach(t => teams.add(t)));
+    const sorted = [...teams].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    $teamList.innerHTML = sorted.map(t => `<option value="${t}"></option>`).join("");
+  }
+
+  function renderMatches() {
+    if (!state.matches.length) {
+      $matches.innerHTML = '<div class="empty">No matches loaded.<br/>Set token + SKU above and click <b>Load matches</b>.</div>';
+      updateAnchorInfo();
+      return;
+    }
+    const filter = $filter.value.trim().toLowerCase();
+    const teamFilters = $teamFilter.value.split(/[\s,]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+    const anchorDay = state.anchor?.realTime ? localDayKey(state.anchor.realTime) : null;
+    const sorted = [...state.matches].sort((a, b) => {
+      const ta = realTimeOf(a) ? new Date(realTimeOf(a)).getTime() : 0;
+      const tb = realTimeOf(b) ? new Date(realTimeOf(b)).getTime() : 0;
+      return ta - tb;
+    }).filter(m => {
+      if (anchorDay) {
+        const mr = realTimeOf(m);
+        if (!mr || localDayKey(mr) !== anchorDay) return false;
+      }
+      if (filter && !matchSearchText(m).includes(filter)) return false;
+      if (teamFilters.length) {
+        const matchTeams = teamsOf(m).map(t => t.toUpperCase());
+        if (!teamFilters.some(tf => matchTeams.includes(tf))) return false;
+      }
+      return true;
+    });
+
+    if (!sorted.length) {
+      $matches.innerHTML = '<div class="empty">No matches match the filter.</div>';
+      updateAnchorInfo();
+      return;
+    }
+
+    $matches.innerHTML = sorted.map(m => {
+      const vt = videoTimeFor(m.id);
+      const isAnchor = state.anchor?.matchId === m.id;
+      const hasOverride = state.overrides[m.id] != null;
+      const cls = ["match", isAnchor ? "anchor" : "", hasOverride ? "has-override" : ""].filter(Boolean).join(" ");
+      return `
+        <div class="${cls}" data-id="${m.id}">
+          <div class="match-name">${m.name || "?"}</div>
+          <div class="match-teams">${teamsHtml(m)}</div>
+          <div class="match-meta">
+            <span>${m.field || ""}</span>
+            <span>${vt != null ? fmtTime(vt) : "—"}</span>
+          </div>
+          <div class="match-actions">
+            <button class="small" data-act="seek">▶ Seek</button>
+            <button class="small ghost" data-act="anchor">⚓ Set as anchor</button>
+            <button class="small ghost" data-act="set-current">Pin to current</button>
+            <button class="small ghost" data-act="adj" data-d="-5">−5s</button>
+            <button class="small ghost" data-act="adj" data-d="-1">−1s</button>
+            <button class="small ghost" data-act="adj" data-d="1">+1s</button>
+            <button class="small ghost" data-act="adj" data-d="5">+5s</button>
+            ${hasOverride ? '<button class="small ghost" data-act="reset">Reset</button>' : ""}
+          </div>
+        </div>`;
+    }).join("");
+    updateAnchorInfo();
+  }
+
+  $matches.addEventListener("click", (e) => {
+    const matchEl = e.target.closest(".match");
+    if (!matchEl) return;
+    const id = parseInt(matchEl.dataset.id, 10);
+    const act = e.target.dataset.act;
+    if (!act) {
+      document.querySelectorAll(".match.expanded").forEach(el => {
+        if (el !== matchEl) el.classList.remove("expanded");
+      });
+      matchEl.classList.toggle("expanded");
+      return;
+    }
+    e.stopPropagation();
+    const vt = videoTimeFor(id);
+    if (act === "seek") {
+      if (vt == null) { alert("No anchor set yet. Pick a match you can identify in the stream and click ⚓ Set as anchor."); return; }
+      video.currentTime = vt;
+    } else if (act === "anchor") {
+      setAnchor(id);
+    } else if (act === "set-current") {
+      setOverride(id, video.currentTime);
+    } else if (act === "adj") {
+      const d = parseFloat(e.target.dataset.d);
+      const base = vt ?? video.currentTime;
+      const next = base + d;
+      setOverride(id, next);
+      video.currentTime = next;
+    } else if (act === "reset") {
+      clearOverride(id);
+    }
+  });
+
+  // ---------- Keyboard shortcuts ----------
+  window.addEventListener("keydown", (e) => {
+    const t = e.target;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      video.currentTime = Math.max(0, video.currentTime - 5);
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      video.currentTime = video.currentTime + 5;
+    }
+  }, true);
+
+  // ---------- Init ----------
+  populateDivisions();
+  populateTeamList();
+  renderMatches();
+  loadStream();
+  if (state.token && state.sku) document.getElementById("settings").open = false;
+</script>
+</body>
+</html>
