@@ -28,9 +28,17 @@
   }
   #app {
     display: grid;
-    grid-template-columns: 1fr 400px;
+    grid-template-columns: 1fr 6px 400px;
     height: 100vh;
   }
+  #resizer {
+    background: var(--border);
+    cursor: col-resize;
+    transition: background 0.15s;
+  }
+  #resizer:hover, #resizer.dragging { background: var(--accent); }
+  body.resizing { cursor: col-resize; user-select: none; }
+  body.resizing iframe, body.resizing video { pointer-events: none; }
   #player-pane {
     display: flex;
     align-items: center;
@@ -179,6 +187,7 @@
   <div id="player-pane">
     <video id="video" controls autoplay playsinline></video>
   </div>
+  <div id="resizer" title="Drag to resize"></div>
   <div id="sidebar">
     <details id="settings" open>
       <summary>Settings</summary>
@@ -280,7 +289,8 @@
     eventId: null, divisionId: null,
     divisions: [], matches: [],
     anchor: null,    // { matchId, videoTime, realTime }
-    overrides: {}    // matchId -> videoTime (seconds)
+    overrides: {},   // matchId -> videoTime (seconds)
+    sidebarWidth: 400
   };
   let state;
   try {
@@ -568,6 +578,35 @@
     } else if (act === "reset") {
       clearOverride(id);
     }
+  });
+
+  // ---------- Resizable sidebar ----------
+  const $app = document.getElementById("app");
+  const $resizer = document.getElementById("resizer");
+  function applySidebarWidth(px) {
+    $app.style.gridTemplateColumns = `1fr 6px ${px}px`;
+  }
+  applySidebarWidth(state.sidebarWidth || 400);
+  $resizer.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    $resizer.setPointerCapture(e.pointerId);
+    $resizer.classList.add("dragging");
+    document.body.classList.add("resizing");
+    const onMove = (ev) => {
+      const w = Math.max(240, Math.min(window.innerWidth - 320, window.innerWidth - ev.clientX));
+      applySidebarWidth(w);
+      state.sidebarWidth = w;
+    };
+    const onUp = () => {
+      $resizer.releasePointerCapture(e.pointerId);
+      $resizer.classList.remove("dragging");
+      document.body.classList.remove("resizing");
+      $resizer.removeEventListener("pointermove", onMove);
+      $resizer.removeEventListener("pointerup", onUp);
+      save();
+    };
+    $resizer.addEventListener("pointermove", onMove);
+    $resizer.addEventListener("pointerup", onUp);
   });
 
   // ---------- Keyboard shortcuts ----------
