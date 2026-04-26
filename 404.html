@@ -8,6 +8,11 @@
 // Rewrites /team/886Y/ -> /?/team/886Y/ and redirects to index.html.
 // Auto-detect project pages (username.github.io/<repo>/) vs custom domain.
 var l = window.location;
+// Real subdirectory pages (not SPA routes): redirect to trailing-slash form
+// so GH Pages serves their own index.html instead of the SPA fallback.
+if (/^\/tv$/.test(l.pathname)) {
+  l.replace(l.protocol + '//' + l.host + l.pathname + '/' + l.search + l.hash);
+}
 var pathSegmentsToKeep =
   /\.github\.io$/.test(l.hostname) && l.pathname.split('/').length > 2 ? 1 : 0;
 l.replace(
