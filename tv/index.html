@@ -289,9 +289,29 @@
       hls.loadSource(url);
       hls.attachMedia(video);
       hls.on(Hls.Events.ERROR, (_, d) => console.error("HLS error:", d));
+      hls.on(Hls.Events.LEVEL_LOADED, (_, data) => {
+        const f = data.details?.fragments?.[0];
+        if (f?.programDateTime) {
+          // Wall-clock time at video.currentTime = 0
+          const realMs = f.programDateTime - (f.start || 0) * 1000;
+          autoAnchor(new Date(realMs).toISOString(), "pdt");
+        }
+      });
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = url;
     }
+  }
+
+  function autoAnchor(realTimeIso, source) {
+    if (!realTimeIso) return;
+    // Manual anchors win; don't clobber.
+    if (state.anchor && state.anchor.source === "manual") return;
+    // PDT > scheduled. Don't downgrade an already-PDT anchor.
+    if (state.anchor && state.anchor.source === "pdt" && source !== "pdt") return;
+    if (state.anchor && state.anchor.source === source && state.anchor.realTime === realTimeIso) return;
+    state.anchor = { matchId: null, videoTime: 0, realTime: realTimeIso, source };
+    save();
+    if (typeof renderMatches === "function") renderMatches();
   }
 
   function parseVexTv(url) {
@@ -368,6 +388,12 @@
       $s.className = "status";
       const url = await fetchPlaylistUrl(state.channelId, state.broadcastId);
       attachStream(url);
+      // Fallback anchor from scheduled start; HLS PDT will upgrade later if present.
+      let b = __broadcasts.find(x => x.id === state.broadcastId);
+      if (!b) {
+        try { b = await fetch(`https://api.boxcast.com/broadcasts/${state.broadcastId}`).then(r => r.ok ? r.json() : null); } catch {}
+      }
+      if (b?.starts_at) autoAnchor(b.starts_at, "starts_at");
       $s.textContent = "Stream loaded";
       $s.className = "status ok";
     } catch (e) {
@@ -624,7 +650,7 @@
     const m = state.matches.find(x => x.id === matchId);
     const real = realTimeOf(m);
     if (!real) { alert("Match has no started/scheduled time."); return; }
-    state.anchor = { matchId, videoTime: video.currentTime, realTime: real };
+    state.anchor = { matchId, videoTime: video.currentTime, realTime: real, source: "manual" };
     save();
     renderMatches();
   }
@@ -633,9 +659,15 @@
 
   function updateAnchorInfo() {
     if (!state.anchor) { $anchorInfo.textContent = "no anchor set"; return; }
-    const m = state.matches.find(x => x.id === state.anchor.matchId);
     const day = new Date(state.anchor.realTime).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-    $anchorInfo.textContent = `⚓ ${m?.name || "match " + state.anchor.matchId} · ${day}`;
+    let label;
+    if (state.anchor.source === "pdt") label = "auto (stream)";
+    else if (state.anchor.source === "starts_at") label = "auto (scheduled)";
+    else {
+      const m = state.matches.find(x => x.id === state.anchor.matchId);
+      label = m?.name || "manual";
+    }
+    $anchorInfo.textContent = `⚓ ${label} · ${day}`;
   }
 
   // ---------- Rendering ----------
