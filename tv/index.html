@@ -168,6 +168,53 @@
   #match-filter {
     width: 100%;
   }
+  #team-filter-box {
+    background: #0d0d0d;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 4px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+    cursor: text;
+  }
+  #team-filter-box:focus-within { border-color: var(--accent); }
+  #team-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 3px 4px;
+    flex: 1;
+    min-width: 80px;
+  }
+  .team-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 12px;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    border-radius: 3px;
+    padding: 2px 2px 2px 7px;
+    line-height: 1.4;
+  }
+  .team-chip button {
+    background: transparent;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0 4px;
+    border-radius: 2px;
+    font-family: inherit;
+  }
+  .team-chip button:hover { background: rgba(0,0,0,0.25); }
   #matches { flex: 1; }
   .match {
     padding: 8px 14px;
@@ -265,7 +312,9 @@
         <span id="anchor-info">no anchor set</span>
       </div>
       <input id="match-filter" type="text" placeholder="Filter (match name, field)" />
-      <input id="team-filter" type="text" placeholder="Teams (e.g. 1234A, 5678B) — any match" list="team-list" />
+      <div id="team-filter-box">
+        <input id="team-input" type="text" placeholder="Add teams (1234A, 5678B) — any match" list="team-list" autocomplete="off" />
+      </div>
       <datalist id="team-list"></datalist>
     </div>
     <div id="matches"></div>
@@ -539,9 +588,96 @@
     try { await loadMatches(); } catch (e) { setStatus(e.message, "error"); }
   });
   $filter.addEventListener("input", renderMatches);
-  const $teamFilter = document.getElementById("team-filter");
+  const $teamFilterBox = document.getElementById("team-filter-box");
+  const $teamInput = document.getElementById("team-input");
   const $teamList = document.getElementById("team-list");
-  $teamFilter.addEventListener("input", renderMatches);
+  let selectedTeams = []; // uppercased team names
+
+  function knownTeamsSet() {
+    const set = new Set();
+    state.matches.forEach(m => teamsOf(m).forEach(t => set.add(t.toUpperCase())));
+    return set;
+  }
+  function renderTeamChips() {
+    const chipsHtml = selectedTeams.map(t =>
+      `<span class="team-chip">${t}<button data-team="${t}" title="Remove" aria-label="Remove ${t}">×</button></span>`
+    ).join("");
+    // Keep input as the last child; rebuild chips before it
+    [...$teamFilterBox.querySelectorAll(".team-chip")].forEach(el => el.remove());
+    $teamInput.insertAdjacentHTML("beforebegin", chipsHtml);
+  }
+  function addTeam(raw) {
+    const t = (raw || "").trim().toUpperCase();
+    if (!t) return false;
+    if (selectedTeams.includes(t)) return false;
+    selectedTeams.push(t);
+    renderTeamChips();
+    renderMatches();
+    return true;
+  }
+  function removeTeam(t) {
+    selectedTeams = selectedTeams.filter(x => x !== t);
+    renderTeamChips();
+    renderMatches();
+  }
+
+  $teamFilterBox.addEventListener("click", (e) => {
+    if (e.target.tagName === "BUTTON" && e.target.dataset.team) {
+      removeTeam(e.target.dataset.team);
+      $teamInput.focus();
+      return;
+    }
+    if (e.target === $teamFilterBox) $teamInput.focus();
+  });
+
+  $teamInput.addEventListener("input", () => {
+    const v = $teamInput.value;
+    // Splitter input (paste with commas/spaces): commit any known teams found
+    if (/[,\s]/.test(v)) {
+      const known = knownTeamsSet();
+      const parts = v.split(/[,\s]+/).filter(Boolean);
+      const remaining = [];
+      let added = false;
+      parts.forEach(p => {
+        if (known.has(p.toUpperCase())) { added = addTeam(p) || added; }
+        else remaining.push(p);
+      });
+      $teamInput.value = remaining.join(" ");
+      if (added) return;
+    }
+    // Datalist selection: full match against known team
+    const known = knownTeamsSet();
+    if (known.has(v.trim().toUpperCase())) {
+      addTeam(v);
+      $teamInput.value = "";
+    }
+  });
+
+  $teamInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const v = $teamInput.value.trim();
+      if (!v) return;
+      // Prefer exact match; otherwise first team that starts with the input
+      const known = knownTeamsSet();
+      const upper = v.toUpperCase();
+      let pick = known.has(upper) ? upper : null;
+      if (!pick) {
+        const candidates = [...known].filter(t => t.startsWith(upper));
+        if (candidates.length) {
+          candidates.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+          pick = candidates[0];
+        }
+      }
+      if (pick) {
+        addTeam(pick);
+        $teamInput.value = "";
+      }
+    } else if (e.key === "Backspace" && $teamInput.value === "" && selectedTeams.length) {
+      e.preventDefault();
+      removeTeam(selectedTeams[selectedTeams.length - 1]);
+    }
+  });
 
   document.getElementById("btn-load").addEventListener("click", fullLoad);
   document.getElementById("btn-refresh").addEventListener("click", async () => {
@@ -725,7 +861,7 @@
       return;
     }
     const filter = $filter.value.trim().toLowerCase();
-    const teamFilters = $teamFilter.value.split(/[\s,]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+    const teamFilters = selectedTeams;
     const broadcastDay = (() => {
       const b = __broadcasts.find(x => x.id === state.broadcastId);
       if (b?.starts_at) return localDayKey(b.starts_at);
