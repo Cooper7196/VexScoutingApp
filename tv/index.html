@@ -168,7 +168,7 @@
   #match-filter {
     width: 100%;
   }
-  #team-filter-box {
+  #team-filter-box, #opponent-filter-box {
     background: #0d0d0d;
     border: 1px solid var(--border);
     border-radius: 4px;
@@ -179,8 +179,8 @@
     align-items: center;
     cursor: text;
   }
-  #team-filter-box:focus-within { border-color: var(--accent); }
-  #team-input {
+  #team-filter-box:focus-within, #opponent-filter-box:focus-within { border-color: var(--accent); }
+  #team-input, #opponent-input {
     background: transparent;
     border: none;
     outline: none;
@@ -215,8 +215,8 @@
     font-family: inherit;
   }
   .team-chip button:hover { background: rgba(0,0,0,0.25); }
-  #team-filter-wrap { position: relative; }
-  #team-dropdown {
+  #team-filter-wrap, #opponent-filter-wrap { position: relative; }
+  #team-dropdown, #opponent-dropdown {
     position: absolute;
     top: calc(100% + 2px);
     left: 0;
@@ -229,7 +229,7 @@
     z-index: 100;
     box-shadow: 0 4px 12px rgba(0,0,0,0.5);
   }
-  #team-dropdown[hidden] { display: none; }
+  #team-dropdown[hidden], #opponent-dropdown[hidden] { display: none; }
   .dropdown-item {
     padding: 6px 10px;
     cursor: pointer;
@@ -342,6 +342,12 @@
           <input id="team-input" type="text" placeholder="Add teams (e.g. 1234A or NJIT) — any match" autocomplete="off" />
         </div>
         <div id="team-dropdown" hidden></div>
+      </div>
+      <div id="opponent-filter-wrap">
+        <div id="opponent-filter-box">
+          <input id="opponent-input" type="text" placeholder="Opponents of (pick one team) — show their schedule" autocomplete="off" />
+        </div>
+        <div id="opponent-dropdown" hidden></div>
       </div>
     </div>
     <div id="matches"></div>
@@ -761,6 +767,142 @@
     }
   });
 
+  // ---------- Opponent filter (single-select) ----------
+  const $oppFilterBox = document.getElementById("opponent-filter-box");
+  const $oppInput = document.getElementById("opponent-input");
+  const $oppDropdown = document.getElementById("opponent-dropdown");
+  let opponentOf = null; // single uppercased team name
+  let oppDropdownItems = [];
+  let oppDropdownIndex = -1;
+
+  function getOpponentsOf(team) {
+    const opps = new Set();
+    state.matches.forEach(m => {
+      const alliances = m.alliances || [];
+      const myAlliance = alliances.find(a =>
+        (a.teams || []).some(t => (t.team?.name || "").toUpperCase() === team)
+      );
+      if (!myAlliance) return;
+      alliances.forEach(a => {
+        if (a === myAlliance) return;
+        (a.teams || []).forEach(t => {
+          const name = (t.team?.name || "").toUpperCase();
+          if (name) opps.add(name);
+        });
+      });
+    });
+    return opps;
+  }
+
+  function renderOpponentChip() {
+    [...$oppFilterBox.querySelectorAll(".team-chip")].forEach(el => el.remove());
+    if (opponentOf) {
+      $oppInput.placeholder = "";
+      $oppInput.style.display = "none";
+      const html = `<span class="team-chip">vs ${opponentOf}<button data-clear="1" title="Clear" aria-label="Clear">×</button></span>`;
+      $oppFilterBox.insertAdjacentHTML("afterbegin", html);
+    } else {
+      $oppInput.placeholder = "Opponents of (pick one team) — show their schedule";
+      $oppInput.style.display = "";
+    }
+  }
+  function setOpponentOf(team) {
+    opponentOf = (team || "").toUpperCase() || null;
+    $oppInput.value = "";
+    renderOpponentChip();
+    renderMatches();
+  }
+  function clearOpponentOf() {
+    opponentOf = null;
+    renderOpponentChip();
+    renderMatches();
+    $oppInput.focus();
+    updateOppDropdown();
+  }
+
+  function updateOppDropdown() {
+    const q = $oppInput.value.trim();
+    const all = [...knownTeamsSet()].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    let items;
+    if (!q) {
+      items = all.slice(0, TEAM_DROPDOWN_LIMIT).map(t => ({ name: t, html: t }));
+    } else if (window.fuzzysort) {
+      const results = fuzzysort.go(q, all, { limit: TEAM_DROPDOWN_LIMIT, threshold: -10000 });
+      items = results.map(r => ({
+        name: r.target,
+        html: r.highlight("<b>", "</b>") || r.target
+      }));
+    } else {
+      const ql = q.toLowerCase();
+      items = all.filter(t => t.toLowerCase().includes(ql))
+                 .slice(0, TEAM_DROPDOWN_LIMIT)
+                 .map(t => ({ name: t, html: t }));
+    }
+    oppDropdownItems = items;
+    oppDropdownIndex = items.length ? 0 : -1;
+    renderOppDropdown();
+  }
+  function renderOppDropdown() {
+    if (!oppDropdownItems.length) { $oppDropdown.hidden = true; return; }
+    $oppDropdown.hidden = false;
+    $oppDropdown.innerHTML = oppDropdownItems.map((it, i) =>
+      `<div class="dropdown-item${i === oppDropdownIndex ? " active" : ""}" data-team="${it.name}">${it.html}</div>`
+    ).join("");
+    const active = $oppDropdown.querySelector(".dropdown-item.active");
+    if (active) active.scrollIntoView({ block: "nearest" });
+  }
+  function hideOppDropdown() {
+    $oppDropdown.hidden = true;
+    oppDropdownItems = [];
+    oppDropdownIndex = -1;
+  }
+
+  $oppFilterBox.addEventListener("click", (e) => {
+    if (e.target.tagName === "BUTTON" && e.target.dataset.clear) {
+      clearOpponentOf();
+      return;
+    }
+    if (e.target === $oppFilterBox && !opponentOf) $oppInput.focus();
+  });
+
+  $oppInput.addEventListener("focus", updateOppDropdown);
+  $oppInput.addEventListener("blur", () => setTimeout(hideOppDropdown, 150));
+
+  $oppDropdown.addEventListener("mousedown", (e) => {
+    const item = e.target.closest(".dropdown-item");
+    if (!item) return;
+    e.preventDefault();
+    setOpponentOf(item.dataset.team);
+    hideOppDropdown();
+  });
+
+  $oppInput.addEventListener("input", updateOppDropdown);
+
+  $oppInput.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (!oppDropdownItems.length) { updateOppDropdown(); return; }
+      oppDropdownIndex = (oppDropdownIndex + 1) % oppDropdownItems.length;
+      renderOppDropdown();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!oppDropdownItems.length) return;
+      oppDropdownIndex = (oppDropdownIndex - 1 + oppDropdownItems.length) % oppDropdownItems.length;
+      renderOppDropdown();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (oppDropdownIndex >= 0 && oppDropdownItems[oppDropdownIndex]) {
+        setOpponentOf(oppDropdownItems[oppDropdownIndex].name);
+        hideOppDropdown();
+      }
+    } else if (e.key === "Escape") {
+      hideOppDropdown();
+    } else if (e.key === "Backspace" && $oppInput.value === "" && opponentOf) {
+      e.preventDefault();
+      clearOpponentOf();
+    }
+  });
+
   document.getElementById("btn-load").addEventListener("click", fullLoad);
   document.getElementById("btn-refresh").addEventListener("click", async () => {
     try {
@@ -936,6 +1078,7 @@
     }
     const filter = $filter.value.trim().toLowerCase();
     const teamFilters = selectedTeams;
+    const opponentSet = opponentOf ? getOpponentsOf(opponentOf) : null;
     const broadcastDay = (() => {
       const b = __broadcasts.find(x => x.id === state.broadcastId);
       if (b?.starts_at) return localDayKey(b.starts_at);
@@ -954,6 +1097,10 @@
       if (teamFilters.length) {
         const matchTeams = teamsOf(m).map(t => t.toUpperCase());
         if (!teamFilters.some(tf => matchTeams.includes(tf))) return false;
+      }
+      if (opponentSet && opponentSet.size) {
+        const matchTeams = teamsOf(m).map(t => t.toUpperCase());
+        if (!matchTeams.some(t => opponentSet.has(t))) return false;
       }
       return true;
     });
