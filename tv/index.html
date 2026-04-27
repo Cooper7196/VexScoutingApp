@@ -1173,8 +1173,14 @@
     const mode = state.sortMode || "time";
     let html = "";
     if (mode === "team") {
-      // Group by each filter team (or by every team if no filter)
+      // Group by each filter team. Priority:
+      //   1. Team-chip filters (explicit user picks)
+      //   2. The opponent set when "Opponents of" is active
+      //   3. Every team in the filtered set
       let groupTeams = teamFilters.slice();
+      if (!groupTeams.length && opponentSet && opponentSet.size) {
+        groupTeams = [...opponentSet].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      }
       if (!groupTeams.length) {
         const set = new Set();
         filtered.forEach(m => teamsOf(m).forEach(t => set.add(t.toUpperCase())));
