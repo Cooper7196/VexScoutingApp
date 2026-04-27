@@ -215,6 +215,31 @@
     font-family: inherit;
   }
   .team-chip button:hover { background: rgba(0,0,0,0.25); }
+  #team-filter-wrap { position: relative; }
+  #team-dropdown {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 0;
+    right: 0;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    max-height: 280px;
+    overflow-y: auto;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  }
+  #team-dropdown[hidden] { display: none; }
+  .dropdown-item {
+    padding: 6px 10px;
+    cursor: pointer;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 13px;
+    color: var(--text);
+  }
+  .dropdown-item b { color: var(--accent); font-weight: 600; }
+  .dropdown-item.active, .dropdown-item:hover { background: var(--accent); color: #fff; }
+  .dropdown-item.active b, .dropdown-item:hover b { color: #fff; text-decoration: underline; }
   #matches { flex: 1; }
   .match {
     padding: 8px 14px;
@@ -312,16 +337,19 @@
         <span id="anchor-info">no anchor set</span>
       </div>
       <input id="match-filter" type="text" placeholder="Filter (match name, field)" />
-      <div id="team-filter-box">
-        <input id="team-input" type="text" placeholder="Add teams (1234A, 5678B) — any match" list="team-list" autocomplete="off" />
+      <div id="team-filter-wrap">
+        <div id="team-filter-box">
+          <input id="team-input" type="text" placeholder="Add teams (e.g. 1234A or NJIT) — any match" autocomplete="off" />
+        </div>
+        <div id="team-dropdown" hidden></div>
       </div>
-      <datalist id="team-list"></datalist>
     </div>
     <div id="matches"></div>
   </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fuzzysort@3.0.2/fuzzysort.min.js"></script>
 <script>
   // ---------- Player ----------
   const BOXCAST_ACCOUNT = "jm81brqcwqhlenmnd1ub";
@@ -590,19 +618,26 @@
   $filter.addEventListener("input", renderMatches);
   const $teamFilterBox = document.getElementById("team-filter-box");
   const $teamInput = document.getElementById("team-input");
-  const $teamList = document.getElementById("team-list");
+  const $teamDropdown = document.getElementById("team-dropdown");
+  const TEAM_DROPDOWN_LIMIT = 50;
   let selectedTeams = []; // uppercased team names
+  let dropdownItems = []; // [{name, html}]
+  let dropdownIndex = -1;
 
   function knownTeamsSet() {
     const set = new Set();
     state.matches.forEach(m => teamsOf(m).forEach(t => set.add(t.toUpperCase())));
     return set;
   }
+  function getCandidateTeams() {
+    const set = knownTeamsSet();
+    selectedTeams.forEach(t => set.delete(t));
+    return [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }
   function renderTeamChips() {
     const chipsHtml = selectedTeams.map(t =>
       `<span class="team-chip">${t}<button data-team="${t}" title="Remove" aria-label="Remove ${t}">×</button></span>`
     ).join("");
-    // Keep input as the last child; rebuild chips before it
     [...$teamFilterBox.querySelectorAll(".team-chip")].forEach(el => el.remove());
     $teamInput.insertAdjacentHTML("beforebegin", chipsHtml);
   }
@@ -621,61 +656,108 @@
     renderMatches();
   }
 
+  function updateDropdown() {
+    const q = $teamInput.value.trim();
+    const all = getCandidateTeams();
+    let items;
+    if (!q) {
+      items = all.slice(0, TEAM_DROPDOWN_LIMIT).map(t => ({ name: t, html: t }));
+    } else if (window.fuzzysort) {
+      const results = fuzzysort.go(q, all, { limit: TEAM_DROPDOWN_LIMIT, threshold: -10000 });
+      items = results.map(r => ({
+        name: r.target,
+        html: r.highlight("<b>", "</b>") || r.target
+      }));
+    } else {
+      const ql = q.toLowerCase();
+      items = all.filter(t => t.toLowerCase().includes(ql))
+                 .slice(0, TEAM_DROPDOWN_LIMIT)
+                 .map(t => ({ name: t, html: t }));
+    }
+    dropdownItems = items;
+    dropdownIndex = items.length ? 0 : -1;
+    renderDropdown();
+  }
+  function renderDropdown() {
+    if (!dropdownItems.length) { $teamDropdown.hidden = true; return; }
+    $teamDropdown.hidden = false;
+    $teamDropdown.innerHTML = dropdownItems.map((it, i) =>
+      `<div class="dropdown-item${i === dropdownIndex ? " active" : ""}" data-team="${it.name}">${it.html}</div>`
+    ).join("");
+    const active = $teamDropdown.querySelector(".dropdown-item.active");
+    if (active) active.scrollIntoView({ block: "nearest" });
+  }
+  function hideDropdown() {
+    $teamDropdown.hidden = true;
+    dropdownItems = [];
+    dropdownIndex = -1;
+  }
+
   $teamFilterBox.addEventListener("click", (e) => {
     if (e.target.tagName === "BUTTON" && e.target.dataset.team) {
       removeTeam(e.target.dataset.team);
       $teamInput.focus();
+      updateDropdown();
       return;
     }
     if (e.target === $teamFilterBox) $teamInput.focus();
   });
 
+  $teamInput.addEventListener("focus", updateDropdown);
+  $teamInput.addEventListener("blur", () => {
+    // Delay so dropdown mousedown registers before we hide it
+    setTimeout(hideDropdown, 150);
+  });
+
+  $teamDropdown.addEventListener("mousedown", (e) => {
+    const item = e.target.closest(".dropdown-item");
+    if (!item) return;
+    e.preventDefault(); // keep input focused
+    addTeam(item.dataset.team);
+    $teamInput.value = "";
+    updateDropdown();
+  });
+
   $teamInput.addEventListener("input", () => {
     const v = $teamInput.value;
-    // Splitter input (paste with commas/spaces): commit any known teams found
+    // Auto-commit comma/space-separated paste of known teams
     if (/[,\s]/.test(v)) {
       const known = knownTeamsSet();
       const parts = v.split(/[,\s]+/).filter(Boolean);
       const remaining = [];
-      let added = false;
       parts.forEach(p => {
-        if (known.has(p.toUpperCase())) { added = addTeam(p) || added; }
+        if (known.has(p.toUpperCase())) addTeam(p);
         else remaining.push(p);
       });
       $teamInput.value = remaining.join(" ");
-      if (added) return;
     }
-    // Datalist selection: full match against known team
-    const known = knownTeamsSet();
-    if (known.has(v.trim().toUpperCase())) {
-      addTeam(v);
-      $teamInput.value = "";
-    }
+    updateDropdown();
   });
 
   $teamInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
+    if (e.key === "ArrowDown") {
       e.preventDefault();
-      const v = $teamInput.value.trim();
-      if (!v) return;
-      // Prefer exact match; otherwise first team that starts with the input
-      const known = knownTeamsSet();
-      const upper = v.toUpperCase();
-      let pick = known.has(upper) ? upper : null;
-      if (!pick) {
-        const candidates = [...known].filter(t => t.startsWith(upper));
-        if (candidates.length) {
-          candidates.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-          pick = candidates[0];
-        }
-      }
-      if (pick) {
-        addTeam(pick);
+      if (!dropdownItems.length) { updateDropdown(); return; }
+      dropdownIndex = (dropdownIndex + 1) % dropdownItems.length;
+      renderDropdown();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!dropdownItems.length) return;
+      dropdownIndex = (dropdownIndex - 1 + dropdownItems.length) % dropdownItems.length;
+      renderDropdown();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (dropdownIndex >= 0 && dropdownItems[dropdownIndex]) {
+        addTeam(dropdownItems[dropdownIndex].name);
         $teamInput.value = "";
+        updateDropdown();
       }
+    } else if (e.key === "Escape") {
+      hideDropdown();
     } else if (e.key === "Backspace" && $teamInput.value === "" && selectedTeams.length) {
       e.preventDefault();
       removeTeam(selectedTeams[selectedTeams.length - 1]);
+      updateDropdown();
     }
   });
 
@@ -756,7 +838,6 @@
     state.matches = all;
     save();
     setStatus(`Loaded ${all.length} matches`, "ok");
-    populateTeamList();
     renderMatches();
   }
 
@@ -845,13 +926,6 @@
   }
   function teamsOf(m) {
     return (m.alliances || []).flatMap(a => (a.teams || []).map(t => t.team?.name || "")).filter(Boolean);
-  }
-
-  function populateTeamList() {
-    const teams = new Set();
-    state.matches.forEach(m => teamsOf(m).forEach(t => teams.add(t)));
-    const sorted = [...teams].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-    $teamList.innerHTML = sorted.map(t => `<option value="${t}"></option>`).join("");
   }
 
   function renderMatches() {
@@ -997,7 +1071,6 @@
 
   // ---------- Init ----------
   populateDivisions();
-  populateTeamList();
   renderMatches();
   loadStream();
   initBoxcastDiscovery();
