@@ -288,6 +288,19 @@
     font-size: 13px;
     text-align: center;
   }
+  .team-group-header {
+    padding: 8px 14px;
+    background: var(--panel2);
+    color: var(--accent);
+    font-weight: 600;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border);
+    border-top: 1px solid var(--border);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .team-group-header:first-child { border-top: none; }
 </style>
 </head>
 <body>
@@ -336,7 +349,14 @@
         <span>Matches</span>
         <span id="anchor-info">no anchor set</span>
       </div>
-      <input id="match-filter" type="text" placeholder="Filter (match name, field)" />
+      <div class="row" style="gap:6px">
+        <input id="match-filter" type="text" placeholder="Filter (match name, field)" style="flex:1;min-width:0" />
+        <select id="sort-mode" title="Sort matches" style="flex:0 0 auto">
+          <option value="time">By time</option>
+          <option value="qual">By qual #</option>
+          <option value="team">By team</option>
+        </select>
+      </div>
       <div id="team-filter-wrap">
         <div id="team-filter-box">
           <input id="team-input" type="text" placeholder="Add teams (e.g. 1234A or NJIT) — any match" autocomplete="off" />
@@ -473,7 +493,8 @@
     anchor: null,    // { matchId, videoTime, realTime } — derived from anchors[broadcastId]
     anchors: {},     // broadcastId -> anchor (per-stream)
     overrides: {},   // matchId -> videoTime (seconds)
-    sidebarWidth: 400
+    sidebarWidth: 400,
+    sortMode: "time" // "time" | "qual" | "team"
   };
   // Hardcoded anchors keyed by BoxCast broadcast id. Filled in over time as
   // streams are tuned and exported. User-saved anchors in localStorage win.
@@ -622,6 +643,13 @@
     try { await loadMatches(); } catch (e) { setStatus(e.message, "error"); }
   });
   $filter.addEventListener("input", renderMatches);
+  const $sortMode = document.getElementById("sort-mode");
+  $sortMode.value = state.sortMode || "time";
+  $sortMode.addEventListener("change", () => {
+    state.sortMode = $sortMode.value;
+    save();
+    renderMatches();
+  });
   const $teamFilterBox = document.getElementById("team-filter-box");
   const $teamInput = document.getElementById("team-input");
   const $teamDropdown = document.getElementById("team-dropdown");
@@ -1069,6 +1097,41 @@
   function teamsOf(m) {
     return (m.alliances || []).flatMap(a => (a.teams || []).map(t => t.team?.name || "")).filter(Boolean);
   }
+  function matchNum(m) {
+    if (typeof m.matchnum === "number") return m.matchnum;
+    const n = (m.name || "").match(/(\d+)\s*$/);
+    return n ? parseInt(n[1], 10) : 0;
+  }
+  function timeOf(m) {
+    const r = realTimeOf(m);
+    return r ? new Date(r).getTime() : 0;
+  }
+  function renderMatchRow(m) {
+    const vt = videoTimeFor(m.id);
+    const isAnchor = state.anchor?.matchId === m.id;
+    const hasOverride = state.overrides[m.id] != null;
+    const cls = ["match", isAnchor ? "anchor" : "", hasOverride ? "has-override" : ""].filter(Boolean).join(" ");
+    return `
+      <div class="${cls}" data-id="${m.id}">
+        <div class="match-name">${m.name || "?"}</div>
+        <div class="match-teams">${teamsHtml(m)}</div>
+        <div class="match-meta">
+          <span>${m.field || ""}</span>
+          <span class="match-seek">
+            <button class="small" data-act="seek" ${vt == null ? "disabled" : ""}>▶ ${vt != null ? fmtTime(vt) : "—"}</button>
+          </span>
+        </div>
+        <div class="match-actions">
+          <button class="small ghost" data-act="anchor">⚓ Set as anchor</button>
+          <button class="small ghost" data-act="set-current">Pin to current</button>
+          <button class="small ghost" data-act="adj" data-d="-5">−5s</button>
+          <button class="small ghost" data-act="adj" data-d="-1">−1s</button>
+          <button class="small ghost" data-act="adj" data-d="1">+1s</button>
+          <button class="small ghost" data-act="adj" data-d="5">+5s</button>
+          ${hasOverride ? '<button class="small ghost" data-act="reset">Reset</button>' : ""}
+        </div>
+      </div>`;
+  }
 
   function renderMatches() {
     if (!state.matches.length) {
@@ -1084,11 +1147,7 @@
       if (b?.starts_at) return localDayKey(b.starts_at);
       return state.anchor?.realTime ? localDayKey(state.anchor.realTime) : null;
     })();
-    const sorted = [...state.matches].sort((a, b) => {
-      const ta = realTimeOf(a) ? new Date(realTimeOf(a)).getTime() : 0;
-      const tb = realTimeOf(b) ? new Date(realTimeOf(b)).getTime() : 0;
-      return ta - tb;
-    }).filter(m => {
+    const filtered = state.matches.filter(m => {
       if (broadcastDay) {
         const mr = realTimeOf(m);
         if (!mr || localDayKey(mr) !== broadcastDay) return false;
@@ -1105,38 +1164,37 @@
       return true;
     });
 
-    if (!sorted.length) {
+    if (!filtered.length) {
       $matches.innerHTML = '<div class="empty">No matches match the filter.</div>';
       updateAnchorInfo();
       return;
     }
 
-    $matches.innerHTML = sorted.map(m => {
-      const vt = videoTimeFor(m.id);
-      const isAnchor = state.anchor?.matchId === m.id;
-      const hasOverride = state.overrides[m.id] != null;
-      const cls = ["match", isAnchor ? "anchor" : "", hasOverride ? "has-override" : ""].filter(Boolean).join(" ");
-      return `
-        <div class="${cls}" data-id="${m.id}">
-          <div class="match-name">${m.name || "?"}</div>
-          <div class="match-teams">${teamsHtml(m)}</div>
-          <div class="match-meta">
-            <span>${m.field || ""}</span>
-            <span class="match-seek">
-              <button class="small" data-act="seek" ${vt == null ? "disabled" : ""}>▶ ${vt != null ? fmtTime(vt) : "—"}</button>
-            </span>
-          </div>
-          <div class="match-actions">
-            <button class="small ghost" data-act="anchor">⚓ Set as anchor</button>
-            <button class="small ghost" data-act="set-current">Pin to current</button>
-            <button class="small ghost" data-act="adj" data-d="-5">−5s</button>
-            <button class="small ghost" data-act="adj" data-d="-1">−1s</button>
-            <button class="small ghost" data-act="adj" data-d="1">+1s</button>
-            <button class="small ghost" data-act="adj" data-d="5">+5s</button>
-            ${hasOverride ? '<button class="small ghost" data-act="reset">Reset</button>' : ""}
-          </div>
-        </div>`;
-    }).join("");
+    const mode = state.sortMode || "time";
+    let html = "";
+    if (mode === "team") {
+      // Group by each filter team (or by every team if no filter)
+      let groupTeams = teamFilters.slice();
+      if (!groupTeams.length) {
+        const set = new Set();
+        filtered.forEach(m => teamsOf(m).forEach(t => set.add(t.toUpperCase())));
+        groupTeams = [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      }
+      html = groupTeams.map(team => {
+        const inGroup = filtered
+          .filter(m => teamsOf(m).map(t => t.toUpperCase()).includes(team))
+          .sort((a, b) => matchNum(a) - matchNum(b));
+        if (!inGroup.length) return "";
+        return `<div class="team-group-header">Team ${team} · ${inGroup.length} match${inGroup.length === 1 ? "" : "es"}</div>` +
+               inGroup.map(renderMatchRow).join("");
+      }).join("");
+    } else {
+      const arr = [...filtered];
+      if (mode === "qual") arr.sort((a, b) => matchNum(a) - matchNum(b));
+      else arr.sort((a, b) => timeOf(a) - timeOf(b));
+      html = arr.map(renderMatchRow).join("");
+    }
+    $matches.innerHTML = html;
     updateAnchorInfo();
   }
 
