@@ -821,6 +821,30 @@
     });
     return opps;
   }
+  function getOpponentsOrdered(team) {
+    // Returns opponents in the order they first play against `team` (by qual #).
+    const order = [];
+    const seen = new Set();
+    const sorted = [...state.matches].sort((a, b) => matchNum(a) - matchNum(b));
+    sorted.forEach(m => {
+      const alliances = m.alliances || [];
+      const myAlliance = alliances.find(a =>
+        (a.teams || []).some(t => (t.team?.name || "").toUpperCase() === team)
+      );
+      if (!myAlliance) return;
+      alliances.forEach(a => {
+        if (a === myAlliance) return;
+        (a.teams || []).forEach(t => {
+          const name = (t.team?.name || "").toUpperCase();
+          if (name && !seen.has(name)) {
+            seen.add(name);
+            order.push(name);
+          }
+        });
+      });
+    });
+    return order;
+  }
 
   function renderOpponentChip() {
     [...$oppFilterBox.querySelectorAll(".team-chip")].forEach(el => el.remove());
@@ -1178,8 +1202,8 @@
       //   2. The opponent set when "Opponents of" is active
       //   3. Every team in the filtered set
       let groupTeams = teamFilters.slice();
-      if (!groupTeams.length && opponentSet && opponentSet.size) {
-        groupTeams = [...opponentSet].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      if (!groupTeams.length && opponentOf && opponentSet && opponentSet.size) {
+        groupTeams = getOpponentsOrdered(opponentOf);
       }
       if (!groupTeams.length) {
         const set = new Set();
